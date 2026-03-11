@@ -11,14 +11,14 @@ import { useRequireAuth } from "@/lib/auth";
 import { studentApi } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 
-// ✅ Uses mimetype from Content model
-function fileIcon(mimetype: string) {
-  if (!mimetype) return "📁";
-  if (mimetype.includes("pdf"))   return "📄";
-  if (mimetype.includes("word") || mimetype.includes("document")) return "📝";
-  if (mimetype.includes("image")) return "🖼️";
-  if (mimetype.includes("video")) return "🎥";
-  if (mimetype.includes("presentation") || mimetype.includes("powerpoint")) return "📊";
+// ✅ Uses fileType from Material model (mimetype string)
+function fileIcon(fileType: string) {
+  if (!fileType) return "📁";
+  if (fileType.includes("pdf"))   return "📄";
+  if (fileType.includes("word") || fileType.includes("document")) return "📝";
+  if (fileType.includes("image")) return "🖼️";
+  if (fileType.includes("video")) return "🎥";
+  if (fileType.includes("presentation") || fileType.includes("powerpoint")) return "📊";
   return "📁";
 }
 
@@ -33,7 +33,7 @@ export default function StudentMaterials() {
   useEffect(() => {
     if (authLoading || !user) return;
     studentApi.getMaterials()
-      .then((r) => setMaterials(Array.isArray(r) ? r : (r as any).data || []))
+      .then((r) => setMaterials((r as any).data || []))
       .catch((e) => toast({ title: "Error", description: e.message, variant: "destructive" }))
       .finally(() => setLoading(false));
   }, [authLoading, user]);
@@ -41,8 +41,8 @@ export default function StudentMaterials() {
   const filtered = materials.filter(m =>
     m.title?.toLowerCase().includes(search.toLowerCase()) ||
     m.subject?.toLowerCase().includes(search.toLowerCase()) ||
-    m.grade?.toLowerCase().includes(search.toLowerCase()) ||
-    m.teacher?.toLowerCase().includes(search.toLowerCase())
+    m.class?.toLowerCase().includes(search.toLowerCase()) ||
+    m.uploadedBy?.toLowerCase().includes(search.toLowerCase())
   );
 
   const handleDownload = (m: any) => {
@@ -54,8 +54,8 @@ export default function StudentMaterials() {
         const bUrl = URL.createObjectURL(blob);
         const link = document.createElement("a");
         link.href = bUrl;
-        // ✅ Uses originalName or filename from Content model
-        link.download = m.originalName || m.filename || m.title;
+        // ✅ Uses fileName from Material model
+        link.download = m.fileName || m.title;
         link.click();
         URL.revokeObjectURL(bUrl);
       })
@@ -76,7 +76,7 @@ export default function StudentMaterials() {
       <div className="max-w-2xl mx-auto px-4 sm:px-6 py-5 space-y-4">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Search by title, subject, grade..." className="pl-9" value={search} onChange={e => setSearch(e.target.value)} />
+          <Input placeholder="Search by title, subject, class..." className="pl-9" value={search} onChange={e => setSearch(e.target.value)} />
         </div>
 
         {loading ? [...Array(4)].map((_, i) => <Skeleton key={i} className="h-20 rounded-lg" />) :
@@ -86,19 +86,21 @@ export default function StudentMaterials() {
             <Card key={m._id}>
               <CardContent className="p-4 flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3 min-w-0">
-                  {/* ✅ Uses mimetype field */}
-                  <span className="text-2xl flex-shrink-0">{fileIcon(m.mimetype)}</span>
+                  {/* ✅ Uses fileType field from Material model */}
+                  <span className="text-2xl flex-shrink-0">{fileIcon(m.fileType)}</span>
                   <div className="min-w-0">
                     <p className="font-medium text-sm truncate">{m.title}</p>
-                    {/* ✅ Uses subject, grade, teacher fields from Content model */}
-                    <p className="text-xs text-muted-foreground">{m.subject} · Grade {m.grade}</p>
-                    <p className="text-xs text-muted-foreground">By {m.teacher}</p>
+                    {/* ✅ Uses subject and class fields from Material model */}
+                    <p className="text-xs text-muted-foreground">{m.subject} · {m.class}</p>
+                    {/* ✅ Uses uploadedBy which is populated as teacher name */}
+                    <p className="text-xs text-muted-foreground">By {m.uploadedBy}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
-                  {/* ✅ Uses size field (already formatted as string e.g. "2.4 MB") */}
-                  <Badge variant="outline" className="text-xs hidden sm:inline-flex">{m.size}</Badge>
-                  <Badge variant="secondary" className="text-xs hidden sm:inline-flex">{m.type}</Badge>
+                  {/* ✅ Uses fileSize in bytes — convert to MB */}
+                  <Badge variant="outline" className="text-xs hidden sm:inline-flex">
+                    {(m.fileSize / 1024 / 1024).toFixed(1)}MB
+                  </Badge>
                   <Button size="sm" variant="outline" onClick={() => handleDownload(m)}>
                     <Download className="h-4 w-4 sm:mr-1" />
                     <span className="hidden sm:inline">Download</span>

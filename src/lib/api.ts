@@ -68,8 +68,9 @@ export const studentApi = {
   getGrades: (params?: string) => request<{ data: any[] }>(`/api/student-dashboard/grades${params ? `?${params}` : ""}`),
   getAssignments: () => request<{ data: any[] }>("/api/student-dashboard/assignments"),
   getFinance: () => request<{ data: any }>("/api/student-dashboard/finance"),
-  getMaterials: () => request<any[]>("/api/content"),
-  getMaterialDownloadUrl: (id: string) => `${BASE}/api/content/${id}/download`,
+  // ✅ Uses student dashboard endpoint which filters materials by student's class
+  getMaterials: () => request<{ data: any[] }>("/api/student-dashboard/materials"),
+  getMaterialDownloadUrl: (id: string) => `${BASE}/api/student-dashboard/materials/${id}/download`,
   submitAssignment: (id: string, formData: FormData) => {
     const token = getToken();
     return fetch(`${BASE}/api/student-dashboard/assignments/${id}/submit`, {
@@ -90,18 +91,19 @@ export const teacherApi = {
     request<{ data: any[] }>(`/api/teacher-dashboard/grades${params ? `?${params}` : ""}`),
   enterGrade: (data: any) =>
     request("/api/teacher-dashboard/grades", { method: "POST", body: JSON.stringify(data) }),
-  // ✅ New: enter grade by admission number
+  // ✅ Enter grade by admission number
   enterGradeByAdmission: (data: any) =>
     request("/api/teacher-dashboard/grades/by-admission", { method: "POST", body: JSON.stringify(data) }),
   getAssignments: () => request<{ data: any[] }>("/api/teacher-dashboard/assignments"),
   createAssignment: (data: any) =>
     request("/api/teacher-dashboard/assignments", { method: "POST", body: JSON.stringify(data) }),
-  getMaterials: () => request<any[]>("/api/content"),
+  // ✅ Uses teacher dashboard endpoint which filters by teacher's own uploads
+  getMaterials: () => request<{ data: any[] }>("/api/teacher-dashboard/materials"),
   deleteMaterial: (id: string) =>
-    request(`/api/content/${id}`, { method: "DELETE" }),
+    request(`/api/teacher-dashboard/materials/${id}`, { method: "DELETE" }),
   uploadMaterial: (formData: FormData) => {
     const token = getToken();
-    return fetch(`${BASE}/api/content`, {
+    return fetch(`${BASE}/api/teacher-dashboard/materials`, {
       method: "POST",
       headers: token ? { Authorization: `Bearer ${token}` } : {},
       body: formData,

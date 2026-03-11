@@ -4,18 +4,21 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, Download, FileText, Search } from "lucide-react";
+import { ArrowLeft, Download, Search } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { useRequireAuth } from "@/lib/auth";
 import { studentApi } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 
-function fileIcon(type: string) {
-  if (type?.includes("pdf")) return "📄";
-  if (type?.includes("word")) return "📝";
-  if (type?.includes("image")) return "🖼️";
-  if (type?.includes("video")) return "🎥";
+// ✅ Uses mimetype from Content model
+function fileIcon(mimetype: string) {
+  if (!mimetype) return "📁";
+  if (mimetype.includes("pdf"))   return "📄";
+  if (mimetype.includes("word") || mimetype.includes("document")) return "📝";
+  if (mimetype.includes("image")) return "🖼️";
+  if (mimetype.includes("video")) return "🎥";
+  if (mimetype.includes("presentation") || mimetype.includes("powerpoint")) return "📊";
   return "📁";
 }
 
@@ -30,30 +33,29 @@ export default function StudentMaterials() {
   useEffect(() => {
     if (authLoading || !user) return;
     studentApi.getMaterials()
-      .then((r) => setMaterials(r.data))
+      .then((r) => setMaterials(Array.isArray(r) ? r : (r as any).data || []))
       .catch((e) => toast({ title: "Error", description: e.message, variant: "destructive" }))
       .finally(() => setLoading(false));
   }, [authLoading, user]);
 
   const filtered = materials.filter(m =>
     m.title?.toLowerCase().includes(search.toLowerCase()) ||
-    m.subject?.toLowerCase().includes(search.toLowerCase())
+    m.subject?.toLowerCase().includes(search.toLowerCase()) ||
+    m.grade?.toLowerCase().includes(search.toLowerCase()) ||
+    m.teacher?.toLowerCase().includes(search.toLowerCase())
   );
 
   const handleDownload = (m: any) => {
     const token = localStorage.getItem("token");
     const url = studentApi.getMaterialDownloadUrl(m._id);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = m.fileName;
-    // We need auth header — open in new tab or use fetch
     fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
       .then(r => r.blob())
       .then(blob => {
         const bUrl = URL.createObjectURL(blob);
         const link = document.createElement("a");
         link.href = bUrl;
-        link.download = m.fileName;
+        // ✅ Uses originalName or filename from Content model
+        link.download = m.originalName || m.filename || m.title;
         link.click();
         URL.revokeObjectURL(bUrl);
       })
@@ -74,7 +76,7 @@ export default function StudentMaterials() {
       <div className="max-w-2xl mx-auto px-4 sm:px-6 py-5 space-y-4">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Search materials..." className="pl-9" value={search} onChange={e => setSearch(e.target.value)} />
+          <Input placeholder="Search by title, subject, grade..." className="pl-9" value={search} onChange={e => setSearch(e.target.value)} />
         </div>
 
         {loading ? [...Array(4)].map((_, i) => <Skeleton key={i} className="h-20 rounded-lg" />) :
@@ -84,15 +86,19 @@ export default function StudentMaterials() {
             <Card key={m._id}>
               <CardContent className="p-4 flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3 min-w-0">
-                  <span className="text-2xl flex-shrink-0">{fileIcon(m.fileType)}</span>
+                  {/* ✅ Uses mimetype field */}
+                  <span className="text-2xl flex-shrink-0">{fileIcon(m.mimetype)}</span>
                   <div className="min-w-0">
                     <p className="font-medium text-sm truncate">{m.title}</p>
-                    <p className="text-xs text-muted-foreground">{m.subject} · {m.uploadedBy}</p>
-                    {m.description && <p className="text-xs text-muted-foreground truncate">{m.description}</p>}
+                    {/* ✅ Uses subject, grade, teacher fields from Content model */}
+                    <p className="text-xs text-muted-foreground">{m.subject} · Grade {m.grade}</p>
+                    <p className="text-xs text-muted-foreground">By {m.teacher}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
-                  <Badge variant="outline" className="text-xs hidden sm:inline-flex">{(m.fileSize / 1024 / 1024).toFixed(1)}MB</Badge>
+                  {/* ✅ Uses size field (already formatted as string e.g. "2.4 MB") */}
+                  <Badge variant="outline" className="text-xs hidden sm:inline-flex">{m.size}</Badge>
+                  <Badge variant="secondary" className="text-xs hidden sm:inline-flex">{m.type}</Badge>
                   <Button size="sm" variant="outline" onClick={() => handleDownload(m)}>
                     <Download className="h-4 w-4 sm:mr-1" />
                     <span className="hidden sm:inline">Download</span>

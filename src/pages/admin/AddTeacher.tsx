@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AdminLayout } from "@/components/layout/AdminLayout";
 import { useRequireAuth } from "@/lib/auth";
-import { auth as authApi, teacherCrudApi } from "@/lib/api";
+import { teacherCrudApi } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
 
@@ -30,20 +30,14 @@ export default function AddTeacherPage() {
     }
     setLoading(true);
     try {
-      // 1. Create login account (User)
-      await authApi.register({
-        name: `${form.firstName} ${form.lastName}`,
-        email: form.email,
-        password: form.password,
-        role: "teacher",
-      });
-      // 2. Create Teacher profile
+      // ✅ Single call to /api/teachers — backend handles both User + Teacher creation
       await teacherCrudApi.create({
         firstName: form.firstName,
         lastName: form.lastName,
         gender: form.gender,
         age: Number(form.age),
         email: form.email,
+        password: form.password,
         phone: form.phone || undefined,
         teacherId: form.teacherId,
         subject: form.subject,
@@ -55,7 +49,9 @@ export default function AddTeacherPage() {
       navigate("/admin/teachers");
     } catch (e: any) {
       toast({ title: "Error", description: e.message, variant: "destructive" });
-    } finally { setLoading(false); }
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

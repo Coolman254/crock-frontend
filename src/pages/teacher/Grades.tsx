@@ -9,8 +9,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  ArrowLeft, Plus, Search, ChevronRight, Users, BookOpen,
-  GraduationCap, Award, Loader2, CheckCircle2, AlertCircle, Filter
+  ArrowLeft, Plus, Search, Users, BookOpen,
+  GraduationCap, Award, Loader2, CheckCircle2, AlertCircle
 } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { BottomNav } from "@/components/layout/BottomNav";
@@ -43,9 +43,12 @@ const TERMS = ["Term 1", "Term 2", "Term 3"];
 const EXAM_TYPES = ["End Term", "Mid Term", "CAT", "Assignment", "Project"];
 const CURRENT_YEAR = String(new Date().getFullYear());
 
-// ── Default form ─────────────────────────────────────────────────────────────
 const emptyForm = () => ({
-  studentId: "", subject: "", score: "",
+  // admission number mode
+  admissionNo: "",
+  // fallback dropdown mode
+  studentId: "",
+  subject: "", score: "",
   term: "Term 1", year: CURRENT_YEAR,
   examType: "End Term", remarks: ""
 });
@@ -56,25 +59,26 @@ export default function TeacherGrades() {
   const [searchParams] = useSearchParams();
   const { toast } = useToast();
 
-  // ── State ──────────────────────────────────────────────────────────────────
   const [grades, setGrades] = useState<any[]>([]);
   const [students, setStudents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [savedStudent, setSavedStudent] = useState<any>(null);
   const [showDialog, setShowDialog] = useState(false);
   const [form, setForm] = useState(emptyForm());
 
-  // filters
+  // ✅ Toggle between admission number input and dropdown select
+  const [inputMode, setInputMode] = useState<"admission" | "select">("admission");
+  const [admissionError, setAdmissionError] = useState("");
+
   const [filterTerm, setFilterTerm] = useState("all");
   const [filterClass, setFilterClass] = useState(searchParams.get("class") || "all");
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState<"list" | "by-student">("list");
 
-  // derived class list from students
   const classes = [...new Set(students.map((s) => s.class).filter(Boolean))].sort();
 
-  // ── Fetch ──────────────────────────────────────────────────────────────────
   const fetchAll = useCallback(async () => {
     if (!user) return;
     setLoading(true);
@@ -96,17 +100,17 @@ export default function TeacherGrades() {
     if (!authLoading && user) fetchAll();
   }, [authLoading, user, fetchAll]);
 
-  // ── Filtered grades ────────────────────────────────────────────────────────
   const filtered = grades.filter((g) => {
     const name = `${g.student?.firstName ?? ""} ${g.student?.lastName ?? ""}`.toLowerCase();
     const cls  = g.student?.class ?? "";
-    if (filterTerm  !== "all" && g.term     !== filterTerm)  return false;
-    if (filterClass !== "all" && cls        !== filterClass) return false;
-    if (search && !name.includes(search.toLowerCase()) && !g.subject?.toLowerCase().includes(search.toLowerCase())) return false;
+    if (filterTerm  !== "all" && g.term !== filterTerm)   return false;
+    if (filterClass !== "all" && cls   !== filterClass)   return false;
+    if (search && !name.includes(search.toLowerCase()) &&
+        !g.subject?.toLowerCase().includes(search.toLowerCase()) &&
+        !g.student?.admissionNo?.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   });
 
-  // group by student for the "by-student" tab
   const byStudent: Record<string, { student: any; grades: any[] }> = {};
   filtered.forEach((g) => {
     const id = g.student?._id ?? "unknown";
@@ -114,51 +118,92 @@ export default function TeacherGrades() {
     byStudent[id].grades.push(g);
   });
 
-  // ── Summary stats ─────────────────────────────────────────────────────────
   const avg = filtered.length
-    ? Math.round(filtered.reduce((a, g) => a + g.score, 0) / filtered.length)
-    : 0;
+    ? Math.round(filtered.reduce((a, g) => a + g.score, 0) / filtered.length) : 0;
   const passing = filtered.filter((g) => g.score >= 50).length;
 
-  // ── Save grade ─────────────────────────────────────────────────────────────
   const handleSave = async () => {
-    if (!form.studentId || !form.subject || !form.score || !form.term || !form.year) {
+    if (!form.subject || !form.score || !form.term || !form.year) {
       toast({ title: "Fill in all required fields", variant: "destructive" });
       return;
     }
+
+    // Validate based on mode
+    if (inputMode === "admission" && !form.admissionNo.trim()) {
+      setAdmissionError("Admission number is required");
+      return;
+    }
+    if (inputMode === "select" && !form.studentId) {
+      toast({ title: "Please select a student", variant: "destructive" });
+      return;
+    }
+
     setSaving(true);
+    setAdmissionError("");
+
     try {
-      await teacherApi.enterGrade({
-        studentId: form.studentId,
-        subject: form.subject,
-        score: Number(form.score),
-        term: form.term,
-        year: form.year,
-        examType: form.examType,
-        remarks: form.remarks,
-      });
+      let result: any;
+
+      if (inputMode === "admission") {
+        // ✅ Use admission number endpoint
+        result = await teacherApi.enterGradeByAdmission({
+          admissionNo: form.admissionNo.trim(),
+          subject: form.subject,
+          score: Number(form.score),
+          term: form.term,
+          year: form.year,
+          examType: form.examType,
+          remarks: form.remarks,
+        });
+        setSavedStudent({
+          name: result.data?.studentName,
+          admissionNo: result.data?.admissionNo,
+          class: result.data?.class,
+        });
+      } else {
+        // Use MongoDB _id endpoint
+        result = await teacherApi.enterGrade({
+          studentId: form.studentId,
+          subject: form.subject,
+          score: Number(form.score),
+          term: form.term,
+          year: form.year,
+          examType: form.examType,
+          remarks: form.remarks,
+        });
+        const student = students.find(s => s._id === form.studentId);
+        setSavedStudent(student ? {
+          name: `${student.firstName} ${student.lastName}`,
+          admissionNo: student.admissionNo,
+          class: student.class,
+        } : null);
+      }
+
       setSaved(true);
-      toast({ title: "Grade saved!", description: "The student can now view this grade." });
       fetchAll();
-      // brief success flash then reset
       setTimeout(() => {
         setSaved(false);
+        setSavedStudent(null);
         setForm(emptyForm());
         setShowDialog(false);
-      }, 1200);
+      }, 2000);
     } catch (e: any) {
-      toast({ title: "Error", description: e.message, variant: "destructive" });
+      // ✅ Show clear error if admission number not found
+      if (e.message?.includes("No student found")) {
+        setAdmissionError(`No student found with admission number "${form.admissionNo}"`);
+      } else {
+        toast({ title: "Error", description: e.message, variant: "destructive" });
+      }
     } finally {
       setSaving(false);
     }
   };
 
-  // ── Pre-fill subject from selected student's class ─────────────────────────
   const selectedStudent = students.find((s) => s._id === form.studentId);
 
   return (
     <div className="min-h-screen bg-background pb-28">
-      {/* ── Header ─────────────────────────────────────────────────────────── */}
+      {/* Header */}
       <div className="bg-gradient-to-r from-emerald-500 to-teal-600 text-white px-4 pt-10 pb-6 sm:px-6">
         <div className="max-w-2xl mx-auto">
           <div className="flex items-center justify-between mb-4">
@@ -176,7 +221,7 @@ export default function TeacherGrades() {
               </div>
             </div>
             <Button
-              onClick={() => { setForm(emptyForm()); setSaved(false); setShowDialog(true); }}
+              onClick={() => { setForm(emptyForm()); setSaved(false); setAdmissionError(""); setShowDialog(true); }}
               className="bg-white text-emerald-700 hover:bg-white/90 font-semibold min-h-[44px]"
               size="sm"
             >
@@ -184,14 +229,13 @@ export default function TeacherGrades() {
             </Button>
           </div>
 
-          {/* Stats strip */}
           {!loading && grades.length > 0 && (
             <div className="grid grid-cols-3 gap-2 mt-2">
               {[
                 { label: "Records", value: filtered.length, icon: BookOpen },
                 { label: "Avg Score", value: `${avg}%`, icon: Award },
                 { label: "Passing", value: `${filtered.length ? Math.round((passing / filtered.length) * 100) : 0}%`, icon: GraduationCap },
-              ].map(({ label, value, icon: Icon }) => (
+              ].map(({ label, value }) => (
                 <div key={label} className="bg-white/15 rounded-xl px-3 py-2 text-center backdrop-blur-sm">
                   <p className="text-lg font-bold">{value}</p>
                   <p className="text-white/70 text-xs">{label}</p>
@@ -203,32 +247,27 @@ export default function TeacherGrades() {
       </div>
 
       <div className="max-w-2xl mx-auto px-4 sm:px-6 py-5 space-y-4">
-
-        {/* ── Filters ──────────────────────────────────────────────────────── */}
+        {/* Filters */}
         <div className="space-y-3">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               className="pl-9 h-11"
-              placeholder="Search student or subject…"
+              placeholder="Search student, admission no, or subject…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
           <div className="flex gap-2">
             <Select value={filterTerm} onValueChange={setFilterTerm}>
-              <SelectTrigger className="flex-1 h-10">
-                <SelectValue placeholder="Term" />
-              </SelectTrigger>
+              <SelectTrigger className="flex-1 h-10"><SelectValue placeholder="Term" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Terms</SelectItem>
                 {TERMS.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
               </SelectContent>
             </Select>
             <Select value={filterClass} onValueChange={setFilterClass}>
-              <SelectTrigger className="flex-1 h-10">
-                <SelectValue placeholder="Class" />
-              </SelectTrigger>
+              <SelectTrigger className="flex-1 h-10"><SelectValue placeholder="Class" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Classes</SelectItem>
                 {classes.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
@@ -237,7 +276,7 @@ export default function TeacherGrades() {
           </div>
         </div>
 
-        {/* ── View tabs ────────────────────────────────────────────────────── */}
+        {/* Tabs */}
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)}>
           <TabsList className="w-full">
             <TabsTrigger value="list" className="flex-1 text-xs sm:text-sm">
@@ -249,7 +288,7 @@ export default function TeacherGrades() {
           </TabsList>
         </Tabs>
 
-        {/* ── Content ──────────────────────────────────────────────────────── */}
+        {/* Content */}
         {loading ? (
           <div className="space-y-3">
             {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-20 rounded-xl" />)}
@@ -260,57 +299,34 @@ export default function TeacherGrades() {
               <GraduationCap className="h-10 w-10 text-muted-foreground/40 mx-auto" />
               <p className="text-muted-foreground font-medium">No grades found</p>
               <p className="text-muted-foreground text-sm">
-                {grades.length === 0
-                  ? "Start by entering your first grade."
-                  : "Try adjusting your filters."}
+                {grades.length === 0 ? "Start by entering your first grade." : "Try adjusting your filters."}
               </p>
               {grades.length === 0 && (
-                <Button
-                  size="sm"
-                  onClick={() => { setForm(emptyForm()); setShowDialog(true); }}
-                  className="mt-2"
-                >
+                <Button size="sm" onClick={() => { setForm(emptyForm()); setShowDialog(true); }} className="mt-2">
                   <Plus className="h-4 w-4 mr-1.5" />Enter First Grade
                 </Button>
               )}
             </CardContent>
           </Card>
         ) : activeTab === "list" ? (
-          /* ── All Grades list ─────────────────────────────────────────────── */
           <div className="space-y-2">
             {filtered.map((g) => (
               <Card key={g._id} className={cn("border overflow-hidden transition-shadow hover:shadow-md", gradeBg(g.score))}>
                 <CardContent className="p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-3 min-w-0">
-                      {/* Score circle */}
-                      <div className={cn(
-                        "flex-shrink-0 w-12 h-12 rounded-full border-2 flex flex-col items-center justify-center",
-                        gradeBg(g.score)
-                      )}>
-                        <span className={cn("text-base font-bold leading-none", gradeColor(g.score))}>
-                          {gradeLetter(g.score)}
-                        </span>
-                        <span className={cn("text-[10px] leading-none mt-0.5", gradeColor(g.score))}>
-                          {g.score}%
-                        </span>
+                  <div className="flex items-center gap-3">
+                    <div className={cn("flex-shrink-0 w-12 h-12 rounded-full border-2 flex flex-col items-center justify-center", gradeBg(g.score))}>
+                      <span className={cn("text-base font-bold leading-none", gradeColor(g.score))}>{gradeLetter(g.score)}</span>
+                      <span className={cn("text-[10px] leading-none mt-0.5", gradeColor(g.score))}>{g.score}%</span>
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-semibold text-sm truncate">{g.student?.firstName} {g.student?.lastName}</p>
+                      <p className="text-xs text-muted-foreground">Adm: {g.student?.admissionNo} · {g.subject}</p>
+                      <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                        <Badge variant="outline" className="text-[10px] px-1.5 py-0">{g.term} {g.year}</Badge>
+                        <Badge variant="outline" className="text-[10px] px-1.5 py-0">{g.examType}</Badge>
+                        {g.student?.class && <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{g.student.class}</Badge>}
                       </div>
-                      <div className="min-w-0">
-                        <p className="font-semibold text-sm truncate">
-                          {g.student?.firstName} {g.student?.lastName}
-                        </p>
-                        <p className="text-xs text-muted-foreground truncate">{g.subject}</p>
-                        <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                          <Badge variant="outline" className="text-[10px] px-1.5 py-0">{g.term} {g.year}</Badge>
-                          <Badge variant="outline" className="text-[10px] px-1.5 py-0">{g.examType}</Badge>
-                          {g.student?.class && (
-                            <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{g.student.class}</Badge>
-                          )}
-                        </div>
-                        {g.remarks && (
-                          <p className="text-[11px] text-muted-foreground italic mt-1 truncate">"{g.remarks}"</p>
-                        )}
-                      </div>
+                      {g.remarks && <p className="text-[11px] text-muted-foreground italic mt-1 truncate">"{g.remarks}"</p>}
                     </div>
                   </div>
                 </CardContent>
@@ -318,7 +334,6 @@ export default function TeacherGrades() {
             ))}
           </div>
         ) : (
-          /* ── By Student view ─────────────────────────────────────────────── */
           <div className="space-y-3">
             {Object.values(byStudent).map(({ student, grades: sg }) => {
               const studentAvg = Math.round(sg.reduce((a, g) => a + g.score, 0) / sg.length);
@@ -356,8 +371,8 @@ export default function TeacherGrades() {
         )}
       </div>
 
-      {/* ── Enter Grade Dialog ────────────────────────────────────────────────── */}
-      <Dialog open={showDialog} onOpenChange={(v) => { if (!saving) { setShowDialog(v); if (!v) { setForm(emptyForm()); setSaved(false); } } }}>
+      {/* Enter Grade Dialog */}
+      <Dialog open={showDialog} onOpenChange={(v) => { if (!saving) { setShowDialog(v); if (!v) { setForm(emptyForm()); setSaved(false); setAdmissionError(""); } } }}>
         <DialogContent className="w-[95vw] max-w-md rounded-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -365,7 +380,7 @@ export default function TeacherGrades() {
               Enter Grade
             </DialogTitle>
             <DialogDescription>
-              This grade will be immediately visible to the student in their portal.
+              Grade will be immediately visible to the student in their portal.
             </DialogDescription>
           </DialogHeader>
 
@@ -375,82 +390,113 @@ export default function TeacherGrades() {
                 <CheckCircle2 className="h-8 w-8 text-green-600 dark:text-green-400" />
               </div>
               <p className="font-semibold text-green-700 dark:text-green-400">Grade Saved!</p>
-              <p className="text-sm text-muted-foreground">The student can now view this in their portal.</p>
+              {savedStudent && (
+                <div className="text-sm text-muted-foreground space-y-0.5">
+                  <p className="font-medium text-foreground">{savedStudent.name}</p>
+                  <p>Adm: {savedStudent.admissionNo} · {savedStudent.class}</p>
+                </div>
+              )}
+              <p className="text-sm text-muted-foreground">Student can now view this in their portal.</p>
             </div>
           ) : (
             <>
               <div className="space-y-4 py-1">
-                {/* Student */}
-                <div className="space-y-1.5">
-                  <Label>Student <span className="text-destructive">*</span></Label>
-                  <Select value={form.studentId} onValueChange={(v) => setForm((f) => ({ ...f, studentId: v }))}>
-                    <SelectTrigger className="h-11">
-                      <SelectValue placeholder="Select a student…" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {classes.length > 1
-                        ? classes.map((cls) => (
-                          <div key={cls}>
-                            <div className="px-2 py-1 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">{cls}</div>
-                            {students
-                              .filter((s) => s.class === cls)
-                              .map((s) => (
+
+                {/* ✅ Toggle: Admission Number vs Select from list */}
+                <div className="flex rounded-lg border overflow-hidden">
+                  <button
+                    className={cn(
+                      "flex-1 py-2 text-sm font-medium transition-colors",
+                      inputMode === "admission"
+                        ? "bg-emerald-600 text-white"
+                        : "bg-background text-muted-foreground hover:bg-muted"
+                    )}
+                    onClick={() => { setInputMode("admission"); setAdmissionError(""); }}
+                  >
+                    By Admission No.
+                  </button>
+                  <button
+                    className={cn(
+                      "flex-1 py-2 text-sm font-medium transition-colors",
+                      inputMode === "select"
+                        ? "bg-emerald-600 text-white"
+                        : "bg-background text-muted-foreground hover:bg-muted"
+                    )}
+                    onClick={() => { setInputMode("select"); setAdmissionError(""); }}
+                  >
+                    Select Student
+                  </button>
+                </div>
+
+                {/* Student input */}
+                {inputMode === "admission" ? (
+                  <div className="space-y-1.5">
+                    <Label>Admission Number <span className="text-destructive">*</span></Label>
+                    <Input
+                      className={cn("h-11 uppercase", admissionError && "border-destructive focus-visible:ring-destructive")}
+                      placeholder="e.g. ADM001"
+                      value={form.admissionNo}
+                      onChange={(e) => { setForm(f => ({ ...f, admissionNo: e.target.value })); setAdmissionError(""); }}
+                    />
+                    {admissionError && (
+                      <div className="flex items-center gap-1.5 text-destructive text-xs">
+                        <AlertCircle className="h-3.5 w-3.5" />
+                        {admissionError}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-1.5">
+                    <Label>Student <span className="text-destructive">*</span></Label>
+                    <Select value={form.studentId} onValueChange={(v) => setForm((f) => ({ ...f, studentId: v }))}>
+                      <SelectTrigger className="h-11"><SelectValue placeholder="Select a student…" /></SelectTrigger>
+                      <SelectContent>
+                        {classes.length > 1
+                          ? classes.map((cls) => (
+                            <div key={cls}>
+                              <div className="px-2 py-1 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">{cls}</div>
+                              {students.filter((s) => s.class === cls).map((s) => (
                                 <SelectItem key={s._id} value={s._id}>
                                   {s.firstName} {s.lastName}
                                   <span className="text-muted-foreground text-xs ml-1">· {s.admissionNo}</span>
                                 </SelectItem>
                               ))}
-                          </div>
-                        ))
-                        : students.map((s) => (
-                          <SelectItem key={s._id} value={s._id}>
-                            {s.firstName} {s.lastName}
-                            <span className="text-muted-foreground text-xs ml-1">· {s.admissionNo}</span>
-                          </SelectItem>
-                        ))}
-                    </SelectContent>
-                  </Select>
-                  {selectedStudent && (
-                    <p className="text-xs text-muted-foreground pl-1">
-                      Class: <span className="font-medium">{selectedStudent.class}</span>
-                    </p>
-                  )}
-                </div>
+                            </div>
+                          ))
+                          : students.map((s) => (
+                            <SelectItem key={s._id} value={s._id}>
+                              {s.firstName} {s.lastName}
+                              <span className="text-muted-foreground text-xs ml-1">· {s.admissionNo}</span>
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                    {selectedStudent && (
+                      <p className="text-xs text-muted-foreground pl-1">
+                        Class: <span className="font-medium">{selectedStudent.class}</span> · Adm: {selectedStudent.admissionNo}
+                      </p>
+                    )}
+                  </div>
+                )}
 
                 {/* Subject + Score */}
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
                     <Label>Subject <span className="text-destructive">*</span></Label>
-                    <Input
-                      className="h-11"
-                      placeholder="e.g. Mathematics"
-                      value={form.subject}
-                      onChange={(e) => setForm((f) => ({ ...f, subject: e.target.value }))}
-                    />
+                    <Input className="h-11" placeholder="e.g. Mathematics" value={form.subject}
+                      onChange={(e) => setForm((f) => ({ ...f, subject: e.target.value }))} />
                   </div>
                   <div className="space-y-1.5">
                     <Label>Score (%) <span className="text-destructive">*</span></Label>
-                    <Input
-                      className="h-11"
-                      type="number"
-                      min={0}
-                      max={100}
-                      placeholder="0–100"
-                      value={form.score}
-                      onChange={(e) => setForm((f) => ({ ...f, score: e.target.value }))}
-                    />
+                    <Input className="h-11" type="number" min={0} max={100} placeholder="0–100"
+                      value={form.score} onChange={(e) => setForm((f) => ({ ...f, score: e.target.value }))} />
                   </div>
                 </div>
 
                 {/* Score preview */}
                 {form.score !== "" && Number(form.score) >= 0 && (
-                  <div className={cn(
-                    "flex items-center gap-3 p-3 rounded-xl border",
-                    gradeBg(Number(form.score))
-                  )}>
-                    <div className={cn("text-2xl font-bold", gradeColor(Number(form.score)))}>
-                      {gradeLetter(Number(form.score))}
-                    </div>
+                  <div className={cn("flex items-center gap-3 p-3 rounded-xl border", gradeBg(Number(form.score)))}>
+                    <div className={cn("text-2xl font-bold", gradeColor(Number(form.score)))}>{gradeLetter(Number(form.score))}</div>
                     <div>
                       <p className={cn("text-sm font-semibold", gradeColor(Number(form.score)))}>
                         {Number(form.score) >= 80 ? "Excellent" : Number(form.score) >= 65 ? "Good" : Number(form.score) >= 50 ? "Average" : Number(form.score) >= 40 ? "Below Average" : "Failing"}
@@ -466,18 +512,12 @@ export default function TeacherGrades() {
                     <Label>Term <span className="text-destructive">*</span></Label>
                     <Select value={form.term} onValueChange={(v) => setForm((f) => ({ ...f, term: v }))}>
                       <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {TERMS.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-                      </SelectContent>
+                      <SelectContent>{TERMS.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-1.5">
                     <Label>Year <span className="text-destructive">*</span></Label>
-                    <Input
-                      className="h-11"
-                      value={form.year}
-                      onChange={(e) => setForm((f) => ({ ...f, year: e.target.value }))}
-                    />
+                    <Input className="h-11" value={form.year} onChange={(e) => setForm((f) => ({ ...f, year: e.target.value }))} />
                   </div>
                 </div>
 
@@ -486,21 +526,15 @@ export default function TeacherGrades() {
                   <Label>Exam Type</Label>
                   <Select value={form.examType} onValueChange={(v) => setForm((f) => ({ ...f, examType: v }))}>
                     <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {EXAM_TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-                    </SelectContent>
+                    <SelectContent>{EXAM_TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
 
                 {/* Remarks */}
                 <div className="space-y-1.5">
                   <Label>Remarks <span className="text-muted-foreground font-normal text-xs">(optional — shown to student)</span></Label>
-                  <Input
-                    className="h-11"
-                    placeholder="e.g. Excellent performance, keep it up!"
-                    value={form.remarks}
-                    onChange={(e) => setForm((f) => ({ ...f, remarks: e.target.value }))}
-                  />
+                  <Input className="h-11" placeholder="e.g. Excellent performance, keep it up!"
+                    value={form.remarks} onChange={(e) => setForm((f) => ({ ...f, remarks: e.target.value }))} />
                 </div>
               </div>
 
@@ -508,7 +542,7 @@ export default function TeacherGrades() {
                 <Button variant="outline" onClick={() => setShowDialog(false)} disabled={saving}>Cancel</Button>
                 <Button
                   onClick={handleSave}
-                  disabled={saving || !form.studentId || !form.subject || !form.score}
+                  disabled={saving || !form.subject || !form.score || (inputMode === "admission" ? !form.admissionNo : !form.studentId)}
                   className="bg-emerald-600 hover:bg-emerald-700 text-white min-w-[120px]"
                 >
                   {saving

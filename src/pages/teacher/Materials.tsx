@@ -23,34 +23,33 @@ export default function TeacherMaterials() {
   const [showDialog, setShowDialog] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [file, setFile] = useState<File | null>(null);
-  const [form, setForm] = useState({ title: "", subject: "", grade: "", description: "" });
+  // ✅ uses "class" not "grade" — matches Material model
+  const [form, setForm] = useState({ title: "", subject: "", class: "", description: "" });
 
   const fetchMaterials = () => {
     teacherApi.getMaterials()
-      .then(r => setMaterials(Array.isArray(r) ? r : (r as any).data || []))
+      .then(r => setMaterials((r as any).data || []))
       .finally(() => setLoading(false));
   };
 
   useEffect(() => { if (!authLoading && user) fetchMaterials(); }, [authLoading, user]);
 
   const handleUpload = async () => {
-    if (!file || !form.title || !form.grade) return;
+    if (!file || !form.title || !form.class) return;
     setUploading(true);
     const fd = new FormData();
     fd.append("file", file);
     fd.append("title", form.title);
     fd.append("subject", form.subject);
-    fd.append("grade", form.grade);
+    fd.append("class", form.class); // ✅ "class" not "grade"
     fd.append("description", form.description);
-    // teacher name comes from logged-in user
-    fd.append("teacher", user?.name || user?.email || "Unknown");
     try {
       const r = await teacherApi.uploadMaterial(fd);
       if (r && (r._id || r.success !== false)) {
         toast({ title: "Uploaded!", description: "Material uploaded successfully." });
         setShowDialog(false);
         setFile(null);
-        setForm({ title: "", subject: "", grade: "", description: "" });
+        setForm({ title: "", subject: "", class: "", description: "" });
         fetchMaterials();
       } else {
         toast({ title: "Error", description: r.message || "Upload failed", variant: "destructive" });
@@ -97,11 +96,15 @@ export default function TeacherMaterials() {
               <CardContent className="p-4 flex items-center justify-between gap-2">
                 <div className="min-w-0">
                   <p className="font-medium text-sm truncate">{m.title}</p>
-                  <p className="text-xs text-muted-foreground">{m.subject} · Grade {m.grade}</p>
-                  <p className="text-xs text-muted-foreground">{m.size} · {new Date(m.createdAt).toLocaleDateString()}</p>
+                  {/* ✅ uses "class" and "subject" from Material model */}
+                  <p className="text-xs text-muted-foreground">{m.subject} · {m.class}</p>
+                  {/* ✅ uses "fileSize" (bytes) and "fileType" from Material model */}
+                  <p className="text-xs text-muted-foreground">
+                    {(m.fileSize / 1024 / 1024).toFixed(1)}MB · {new Date(m.createdAt).toLocaleDateString()}
+                  </p>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
-                  <Badge variant="outline" className="text-xs">{m.type}</Badge>
+                  <Badge variant="outline" className="text-xs">{m.fileType?.split("/")[1]?.toUpperCase() ?? "FILE"}</Badge>
                   <Button variant="ghost" size="icon" className="text-red-500 hover:text-red-600 hover:bg-red-50" onClick={() => handleDelete(m._id)}>
                     <Trash2 className="h-4 w-4" />
                   </Button>
@@ -118,8 +121,9 @@ export default function TeacherMaterials() {
           <div className="space-y-3">
             <div><Label>Title *</Label><Input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} /></div>
             <div className="grid grid-cols-2 gap-3">
-              <div><Label>Subject *</Label><Input value={form.subject} onChange={e => setForm(f => ({ ...f, subject: e.target.value }))} /></div>
-              <div><Label>Grade *</Label><Input value={form.grade} placeholder="e.g. Grade 6" onChange={e => setForm(f => ({ ...f, grade: e.target.value }))} /></div>
+              <div><Label>Subject</Label><Input value={form.subject} onChange={e => setForm(f => ({ ...f, subject: e.target.value }))} /></div>
+              {/* ✅ field is "class" not "grade" */}
+              <div><Label>Class *</Label><Input value={form.class} placeholder="e.g. Form 2" onChange={e => setForm(f => ({ ...f, class: e.target.value }))} /></div>
             </div>
             <div><Label>Description</Label><Textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} rows={2} /></div>
             <label className="flex items-center gap-2 text-sm cursor-pointer border-2 border-dashed rounded-lg p-4 hover:bg-muted/50 transition-colors">
@@ -127,7 +131,7 @@ export default function TeacherMaterials() {
               <span className="text-muted-foreground">{file ? file.name : "Click to select file (PDF, Word, PPT, Image, Video)"}</span>
               <input type="file" className="hidden" onChange={e => setFile(e.target.files?.[0] || null)} accept=".pdf,.doc,.docx,.ppt,.pptx,.jpg,.jpeg,.png,.mp4,.mov" />
             </label>
-            <Button className="w-full" onClick={handleUpload} disabled={!file || !form.title || !form.grade || uploading}>
+            <Button className="w-full" onClick={handleUpload} disabled={!file || !form.title || !form.class || uploading}>
               {uploading ? "Uploading..." : "Upload Material"}
             </Button>
           </div>

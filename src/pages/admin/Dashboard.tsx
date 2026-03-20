@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Progress } from "@/components/ui/progress";
-import { Users, GraduationCap, UserCheck, Bell, TrendingUp, DollarSign, ArrowUpRight } from "lucide-react";
+import { Users, GraduationCap, UserCheck, Bell, DollarSign, ArrowUpRight } from "lucide-react";
 import { AdminLayout } from "@/components/layout/AdminLayout";
 import { useRequireAuth } from "@/lib/auth";
 import { auth as authApi, financeApi, announcementApi, studentCrudApi } from "@/lib/api";
@@ -13,9 +12,9 @@ import { cn } from "@/lib/utils";
 export default function AdminDashboard() {
   const { user, loading: authLoading } = useRequireAuth("admin");
   const { toast } = useToast();
-  const [counts, setCounts] = useState({ students: 0, teachers: 0, parents: 0, announcements: 0 });
+  const [counts, setCounts]     = useState({ students: 0, teachers: 0, parents: 0, announcements: 0 });
   const [finStats, setFinStats] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading]   = useState(true);
 
   useEffect(() => {
     if (authLoading || !user) return;
@@ -28,14 +27,15 @@ export default function AdminDashboard() {
     ]).then(([s, t, p, a, f]) => {
       const students = Array.isArray(s) ? s : s.data ?? [];
       setCounts({
-        students: students.length,
-        teachers: t.data?.length || 0,
-        parents: p.data?.length || 0,
-        announcements: a.data?.length || 0,
+        students:      students.length,
+        teachers:      t.data?.length ?? 0,
+        parents:       p.data?.length ?? 0,
+        announcements: a.data?.length ?? 0,
       });
       setFinStats(f.data);
-    }).catch((e) => toast({ title: "Error", description: e.message, variant: "destructive" }))
-      .finally(() => setLoading(false));
+    })
+    .catch(e => toast({ title: "Error", description: e.message, variant: "destructive" }))
+    .finally(() => setLoading(false));
   }, [authLoading, user]);
 
   const statCards = [
@@ -45,9 +45,21 @@ export default function AdminDashboard() {
     { label: "Announcements", value: counts.announcements, icon: Bell,          gradient: "from-violet-500 to-purple-600", link: "/admin/announcements" },
   ];
 
-  const collected   = finStats?.totalCollected ?? 0;
-  const expected    = finStats?.totalExpected ?? 1;
-  const feePercent  = Math.min(100, Math.round((collected / expected) * 100));
+  const collected  = finStats?.totalCollected ?? 0;
+  const expected   = finStats?.totalExpected  ?? 1;
+  const feePercent = Math.min(100, Math.round((collected / expected) * 100));
+
+  // ── Quick actions — all 8 admin shortcuts ──────────────────
+  const quickActions = [
+    { label: "Add Student",  to: "/admin/add-student",  gradient: "from-blue-500 to-indigo-500"  },
+    { label: "Add Teacher",  to: "/admin/add-teacher",  gradient: "from-emerald-500 to-teal-500" },
+    { label: "Add Parent",   to: "/admin/add-parent",   gradient: "from-orange-500 to-amber-500" }, // ✅ added
+    { label: "Add User",     to: "/admin/add-user",     gradient: "from-violet-500 to-purple-500"},
+    { label: "Announcements",to: "/admin/announcements",gradient: "from-sky-500 to-cyan-500"     },
+    { label: "Finance",      to: "/admin/finance",      gradient: "from-red-500 to-rose-500"     },
+    { label: "Reports",      to: "/admin/reports",      gradient: "from-pink-500 to-fuchsia-500" },
+    { label: "Attendance", to: "/admin/attendance", gradient: "from-teal-500 to-cyan-500" },
+  ];
 
   return (
     <AdminLayout title="Dashboard">
@@ -83,16 +95,17 @@ export default function AdminDashboard() {
                 <DollarSign className="h-5 w-5" />
                 <h2 className="font-bold">Finance Overview</h2>
               </div>
-              <Link to="/admin/finance" className="text-white/80 hover:text-white text-xs font-medium flex items-center gap-1">
+              <Link to="/admin/finance"
+                className="text-white/80 hover:text-white text-xs font-medium flex items-center gap-1">
                 Details <ArrowUpRight className="h-3.5 w-3.5" />
               </Link>
             </div>
             <CardContent className="p-5 space-y-4">
               <div className="grid grid-cols-3 gap-4">
                 {[
-                  { label: "Expected",    value: finStats.totalExpected,  color: "text-foreground" },
+                  { label: "Expected",    value: finStats.totalExpected,  color: "text-foreground"  },
                   { label: "Collected",   value: finStats.totalCollected, color: "text-emerald-600" },
-                  { label: "Outstanding", value: finStats.totalBalance,   color: "text-red-500" },
+                  { label: "Outstanding", value: finStats.totalBalance,   color: "text-red-500"     },
                 ].map(({ label, value, color }) => (
                   <div key={label}>
                     <p className="text-xs text-muted-foreground mb-0.5">{label}</p>
@@ -118,18 +131,13 @@ export default function AdminDashboard() {
           </Card>
         )}
 
-        {/* ── Quick Links ── */}
+        {/* ── Quick Actions ── */}
         <div>
-          <h2 className="font-bold text-sm text-muted-foreground uppercase tracking-wide mb-3">Quick Actions</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {[
-              { label: "Add Student",  to: "/admin/add-student",  gradient: "from-blue-500 to-indigo-500" },
-              { label: "Add Teacher",  to: "/admin/add-teacher",  gradient: "from-emerald-500 to-teal-500" },
-              { label: "Add User",     to: "/admin/add-user",     gradient: "from-violet-500 to-purple-500" },
-              { label: "Announcements",to: "/admin/announcements",gradient: "from-orange-500 to-amber-500" },
-              { label: "Finance",      to: "/admin/finance",      gradient: "from-red-500 to-rose-500" },
-              { label: "Reports",      to: "/admin/reports",      gradient: "from-pink-500 to-fuchsia-500" },
-            ].map(({ label, to, gradient }) => (
+          <h2 className="font-bold text-sm text-muted-foreground uppercase tracking-wide mb-3">
+            Quick Actions
+          </h2>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {quickActions.map(({ label, to, gradient }) => (
               <Link key={label} to={to}>
                 <div className={`bg-gradient-to-br ${gradient} text-white rounded-xl px-4 py-3 text-sm font-semibold card-lift shadow-sm flex items-center justify-between`}>
                   {label}
@@ -139,6 +147,7 @@ export default function AdminDashboard() {
             ))}
           </div>
         </div>
+
       </div>
     </AdminLayout>
   );

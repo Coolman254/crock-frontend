@@ -2,7 +2,8 @@ import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, Users, GraduationCap, UserCheck, BookOpen, Bell,
-  Settings, LogOut, ChevronLeft, ChevronRight, School, FileText, BarChart3, DollarSign,
+  Settings, LogOut, ChevronLeft, ChevronRight, School, FileText,
+  BarChart3, DollarSign, CalendarCheck, // ✅ CalendarCheck for Attendance
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -18,6 +19,7 @@ const menuItems = [
   { icon: BookOpen,        label: "Classes",       path: "/admin/classes" },
   { icon: FileText,        label: "Content",       path: "/admin/content" },
   { icon: Bell,            label: "Announcements", path: "/admin/announcements" },
+  { icon: CalendarCheck,   label: "Attendance",    path: "/admin/attendance" }, // ✅ added
   { icon: BarChart3,       label: "Reports",       path: "/admin/reports" },
   { icon: DollarSign,      label: "Finance",       path: "/admin/finance" },
   { icon: Settings,        label: "Settings",      path: "/admin/settings" },
@@ -53,7 +55,8 @@ export function AdminSidebar({ mobile = false, onClose }: AdminSidebarProps) {
           )}
         </Link>
         {!mobile && (
-          <Button variant="ghost" size="icon" className="h-7 w-7 text-sidebar-muted hover:text-sidebar-foreground hover:bg-sidebar-accent"
+          <Button variant="ghost" size="icon"
+            className="h-7 w-7 text-sidebar-muted hover:text-sidebar-foreground hover:bg-sidebar-accent"
             onClick={() => setCollapsed(!collapsed)}>
             {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
           </Button>
@@ -75,7 +78,7 @@ export function AdminSidebar({ mobile = false, onClose }: AdminSidebarProps) {
                       ? "gradient-accent text-white shadow-md shadow-violet-500/20"
                       : "text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent/60",
                   )}>
-                  <item.icon className={cn("h-4.5 w-4.5 flex-shrink-0 h-[18px] w-[18px]")} />
+                  <item.icon className="h-[18px] w-[18px] flex-shrink-0" />
                   {!isCollapsed && <span className="truncate">{item.label}</span>}
                 </Link>
               </li>

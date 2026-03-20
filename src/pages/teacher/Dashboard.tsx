@@ -4,7 +4,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Users, ClipboardList, BookOpen, Bell, LogOut, Package, TrendingUp } from "lucide-react";
+import {
+  Users, ClipboardList, BookOpen, Bell, LogOut,
+  Package, TrendingUp, MessageSquare, CalendarCheck,
+} from "lucide-react";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { useRequireAuth, useSignOut } from "@/lib/auth";
 import { teacherApi } from "@/lib/api";
@@ -12,17 +15,17 @@ import { useToast } from "@/hooks/use-toast";
 
 export default function TeacherDashboard() {
   const { user, loading: authLoading } = useRequireAuth("teacher");
-  const signOut = useSignOut();
+  const signOut  = useSignOut();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [data, setData] = useState<any>(null);
+  const [data, setData]     = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (authLoading || !user) return;
     teacherApi.getDashboard()
-      .then((r) => setData(r.data))
-      .catch((e) => toast({ title: "Error", description: e.message, variant: "destructive" }))
+      .then(r => setData(r.data))
+      .catch(e => toast({ title: "Error", description: e.message, variant: "destructive" }))
       .finally(() => setLoading(false));
   }, [authLoading, user]);
 
@@ -34,19 +37,23 @@ export default function TeacherDashboard() {
     </div>
   );
 
-  const teacher = data?.teacher;
-  const stats = data?.stats;
-  const tasks = data?.upcomingTasks || [];
-  const announcements = data?.announcements || [];
+  const teacher       = data?.teacher;
+  const stats         = data?.stats;
+  const tasks         = data?.upcomingTasks   || [];
+  const announcements = data?.announcements   || [];
 
   return (
     <div className="min-h-screen bg-background pb-24">
+
+      {/* Header */}
       <div className="bg-gradient-to-r from-emerald-600 to-emerald-500 text-white px-4 pt-10 pb-6 sm:px-6">
         <div className="max-w-2xl mx-auto flex items-center justify-between">
           <div>
             <p className="text-white/70 text-sm">Welcome,</p>
             <h1 className="text-xl sm:text-2xl font-bold">{teacher?.fullName || user?.name}</h1>
-            <p className="text-white/70 text-sm mt-0.5">{teacher?.subject} · {teacher?.classesAssigned?.join(", ")}</p>
+            <p className="text-white/70 text-sm mt-0.5">
+              {teacher?.subject} · {teacher?.classesAssigned?.join(", ")}
+            </p>
           </div>
           <Button variant="ghost" size="icon" onClick={signOut} className="text-white hover:bg-white/20">
             <LogOut className="h-5 w-5" />
@@ -55,11 +62,13 @@ export default function TeacherDashboard() {
       </div>
 
       <div className="max-w-2xl mx-auto px-4 sm:px-6 py-5 space-y-5">
+
+        {/* Stats */}
         <div className="grid grid-cols-3 gap-3">
           {[
-            { label: "Students", value: stats?.totalStudents ?? 0, icon: Users, color: "text-blue-500" },
-            { label: "Classes", value: stats?.totalClasses ?? 0, icon: BookOpen, color: "text-emerald-500" },
-            { label: "Assignments", value: stats?.totalAssignments ?? 0, icon: ClipboardList, color: "text-orange-500" },
+            { label: "Students",    value: stats?.totalStudents    ?? 0, icon: Users,         color: "text-blue-500"    },
+            { label: "Classes",     value: stats?.totalClasses     ?? 0, icon: BookOpen,       color: "text-emerald-500" },
+            { label: "Assignments", value: stats?.totalAssignments ?? 0, icon: ClipboardList,  color: "text-orange-500"  },
           ].map(({ label, value, icon: Icon, color }) => (
             <Card key={label} className="text-center p-3">
               <Icon className={`h-5 w-5 mx-auto mb-1 ${color}`} />
@@ -69,20 +78,25 @@ export default function TeacherDashboard() {
           ))}
         </div>
 
+        {/* Quick actions */}
         <div className="grid grid-cols-2 gap-3">
           {[
-            { label: "My Students", icon: Users, to: "/teacher/students" },
-            { label: "Grades", icon: TrendingUp, to: "/teacher/grades" },
-            { label: "Assignments", icon: ClipboardList, to: "/teacher/assignments" },
-            { label: "Materials", icon: Package, to: "/teacher/materials" },
+            { label: "My Students", icon: Users,          to: "/teacher/students"    },
+            { label: "Grades",      icon: TrendingUp,     to: "/teacher/grades"      },
+            { label: "Assignments", icon: ClipboardList,  to: "/teacher/assignments" },
+            { label: "Materials",   icon: Package,        to: "/teacher/materials"   },
+            { label: "Attendance",  icon: CalendarCheck,  to: "/teacher/attendance"  }, // ✅ added
+            { label: "Messages",    icon: MessageSquare,  to: "/teacher/messages"    },
           ].map(({ label, icon: Icon, to }) => (
-            <Button key={label} variant="outline" className="h-16 flex-col gap-1 text-sm" onClick={() => navigate(to)}>
+            <Button key={label} variant="outline" className="h-16 flex-col gap-1 text-sm"
+              onClick={() => navigate(to)}>
               <Icon className="h-5 w-5" />
               {label}
             </Button>
           ))}
         </div>
 
+        {/* Upcoming tasks */}
         {tasks.length > 0 && (
           <Card>
             <CardHeader className="pb-2">
@@ -95,7 +109,8 @@ export default function TeacherDashboard() {
                     <p className="text-sm font-medium truncate">{t.title}</p>
                     <p className="text-xs text-muted-foreground">{t.subject} · {t.class}</p>
                   </div>
-                  <Badge variant={t.priority === "high" ? "destructive" : "secondary"} className="flex-shrink-0 ml-2 text-xs">
+                  <Badge variant={t.priority === "high" ? "destructive" : "secondary"}
+                    className="flex-shrink-0 ml-2 text-xs">
                     {t.due}
                   </Badge>
                 </div>
@@ -104,10 +119,13 @@ export default function TeacherDashboard() {
           </Card>
         )}
 
+        {/* Announcements */}
         {announcements.length > 0 && (
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-base flex items-center gap-2"><Bell className="h-4 w-4" />Announcements</CardTitle>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Bell className="h-4 w-4" /> Announcements
+              </CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
               {announcements.slice(0, 3).map((a: any) => (
@@ -120,6 +138,7 @@ export default function TeacherDashboard() {
           </Card>
         )}
       </div>
+
       <BottomNav role="teacher" />
     </div>
   );

@@ -15,7 +15,7 @@ const roleNavItems: Record<string, { to: string; label: string; icon: any }[]> =
     { to: "/teacher/students",    label: "Students",  icon: Users },
     { to: "/teacher/assignments", label: "Tasks",     icon: ClipboardList },
     { to: "/teacher/grades",      label: "Grades",    icon: BarChart3 },
-    { to: "/teacher/materials",   label: "Materials", icon: Package },
+    { to: "/teacher/messages",    label: "Messages",  icon: MessageSquare }, // ✅ replaced Materials — 5 items max fits well
   ],
   parent: [
     { to: "/parent",          label: "Home",     icon: Home },
@@ -33,12 +33,12 @@ export function BottomNav({ role }: BottomNavProps) {
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 md:hidden">
-      {/* glass pill */}
       <div className="mx-3 mb-3">
         <div className="glass border border-border/50 rounded-2xl shadow-lg">
           <div className="flex items-center justify-around h-16 px-2">
             {navItems.map((item) => {
-              const isActive = location.pathname === item.to ||
+              const isActive =
+                location.pathname === item.to ||
                 (item.to.length > 3 && location.pathname.startsWith(item.to));
               return (
                 <Link
@@ -53,11 +53,17 @@ export function BottomNav({ role }: BottomNavProps) {
                     "flex items-center justify-center w-9 h-7 rounded-xl transition-all",
                     isActive ? "gradient-accent shadow-sm" : "bg-transparent"
                   )}>
-                    <item.icon className={cn("h-4 w-4 transition-colors", isActive ? "text-white" : "text-muted-foreground")} />
+                    <item.icon className={cn(
+                      "h-4 w-4 transition-colors",
+                      isActive ? "text-white" : "text-muted-foreground"
+                    )} />
                   </div>
-                  <span className={cn("text-[9px] font-semibold leading-none transition-colors",
+                  <span className={cn(
+                    "text-[9px] font-semibold leading-none transition-colors",
                     isActive ? "text-violet-600 dark:text-violet-400" : "text-muted-foreground"
-                  )}>{item.label}</span>
+                  )}>
+                    {item.label}
+                  </span>
                 </Link>
               );
             })}

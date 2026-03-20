@@ -26,7 +26,8 @@ import TeacherStudents from "./pages/teacher/Students";
 import TeacherGrades from "./pages/teacher/Grades";
 import TeacherAssignments from "./pages/teacher/Assignments";
 import TeacherMaterials from "./pages/teacher/Materials";
-
+import TeacherMessages from "./pages/teacher/Messages"; 
+import TeacherAttendance from "./pages/teacher/Attendance";
 import ParentDashboard from "./pages/parent/Dashboard";
 import ParentFinance from "./pages/parent/Finance";
 import ParentMessages from "./pages/parent/Messages";
@@ -45,6 +46,7 @@ import AddParentPage from "./pages/admin/AddParent";
 import ClassesPage from "./pages/admin/Classes";
 import SettingsPage from "./pages/admin/Settings";
 import ContentPage from "./pages/admin/Content";
+import AdminAttendance from "./pages/admin/Attendance";
 
 const queryClient = new QueryClient();
 
@@ -76,6 +78,9 @@ const App = () => (
               <Route path="/teacher/grades" element={<TeacherGrades />} />
               <Route path="/teacher/assignments" element={<TeacherAssignments />} />
               <Route path="/teacher/materials" element={<TeacherMaterials />} />
+              <Route path="/teacher/messages" element={<TeacherMessages />} /> 
+              <Route path="/teacher/attendance" element={<TeacherAttendance />} />
+             
 
               <Route path="/parent" element={<ParentDashboard />} />
               <Route path="/parent/finance" element={<ParentFinance />} />
@@ -97,6 +102,7 @@ const App = () => (
               <Route path="/admin/classes" element={<ClassesPage />} />
               <Route path="/admin/settings" element={<SettingsPage />} />
               <Route path="/admin/content" element={<ContentPage />} />
+               <Route path="/admin/attendance" element={<AdminAttendance />} />
 
               <Route path="*" element={<NotFound />} />
             </Routes>

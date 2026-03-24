@@ -1,65 +1,104 @@
-import { useEffect, useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useCallback, useEffect, useState } from "react";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AdminLayout } from "@/components/layout/AdminLayout";
 import { useRequireAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
-import { Search, Pencil, Trash2, Plus, CheckCircle2, XCircle, Clock } from "lucide-react";
+import { Search, Pencil, Trash2, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // ── API helpers ───────────────────────────────────────────────────────────────
 const BASE = (import.meta.env.VITE_API_URL as string) || "http://localhost:5000";
-const token = () => localStorage.getItem("token") ?? "";
-const authH = () => ({ "Content-Type": "application/json", Authorization: `Bearer ${token()}` });
+
+function getToken(): string {
+  return localStorage.getItem("token") ?? "";
+}
+
+function authHeaders(): Record<string, string> {
+  return {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${getToken()}`,
+  };
+}
+
+async function apiRequest(path: string, options: RequestInit = {}) {
+  const res = await fetch(`${BASE}${path}`, {
+    ...options,
+    headers: { ...authHeaders(), ...(options.headers as Record<string, string>) },
+  });
+  const body = await res.json().catch(() => ({ message: res.statusText }));
+  if (!res.ok) throw new Error(body.message || body.error || `HTTP ${res.status}`);
+  return body;
+}
 
 const attendanceApi = {
-  get: (params: string) =>
-    fetch(`${BASE}/api/admin-dashboard/attendance?${params}`, { headers: authH() }).then(r => r.json()),
+  get: (params: string) => apiRequest(`/api/admin-dashboard/attendance?${params}`),
   create: (data: any) =>
-    fetch(`${BASE}/api/admin-dashboard/attendance`, { method: "POST", headers: authH(), body: JSON.stringify(data) }).then(r => r.json()),
+    apiRequest("/api/admin-dashboard/attendance", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
   update: (id: string, data: any) =>
-    fetch(`${BASE}/api/admin-dashboard/attendance/${id}`, { method: "PUT", headers: authH(), body: JSON.stringify(data) }).then(r => r.json()),
+    apiRequest(`/api/admin-dashboard/attendance/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
   delete: (id: string) =>
-    fetch(`${BASE}/api/admin-dashboard/attendance/${id}`, { method: "DELETE", headers: authH() }).then(r => r.json()),
+    apiRequest(`/api/admin-dashboard/attendance/${id}`, { method: "DELETE" }),
 };
 
+const studentApi = {
+  getAll: () => apiRequest("/api/students"),
+};
+
+// ── Constants ─────────────────────────────────────────────────────────────────
 const STATUS_BADGE: Record<string, string> = {
   present: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
   absent:  "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
   late:    "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400",
 };
 
+function formatDate(dateStr?: string) {
+  if (!dateStr) return "—";
+  const d = new Date(dateStr);
+  return isNaN(d.getTime()) ? "—" : d.toLocaleDateString();
+}
+
+// ── Component ─────────────────────────────────────────────────────────────────
 export default function AdminAttendance() {
-  useRequireAuth("admin");
+  const { loading: authLoading } = useRequireAuth("admin");
   const { toast } = useToast();
 
-  const [records, setRecords]     = useState<any[]>([]);
-  const [summary, setSummary]     = useState<any>(null);
-  const [loading, setLoading]     = useState(false);
-  const [search, setSearch]       = useState("");
+  const [records, setRecords]   = useState<any[]>([]);
+  const [summary, setSummary]   = useState<any>(null);
+  const [loading, setLoading]   = useState(false);
+  const [search, setSearch]     = useState("");
+  const [students, setStudents] = useState<any[]>([]);
 
   // Filters
   const [filterDate, setFilterDate]   = useState(new Date().toISOString().split("T")[0]);
   const [filterClass, setFilterClass] = useState("");
 
   // Edit dialog
-  const [editRec, setEditRec]     = useState<any>(null);
+  const [editRec, setEditRec]       = useState<any>(null);
   const [editStatus, setEditStatus] = useState("");
   const [editRemarks, setEditRemarks] = useState("");
   const [editSaving, setEditSaving] = useState(false);
 
   // Add dialog
-  const [showAdd, setShowAdd]     = useState(false);
-  const [addForm, setAddForm]     = useState({ studentId: "", date: new Date().toISOString().split("T")[0], status: "present", remarks: "" });
+  const [showAdd, setShowAdd] = useState(false);
+  const [addForm, setAddForm] = useState({
+    studentId: "", date: new Date().toISOString().split("T")[0], status: "present", remarks: "",
+  });
   const [addSaving, setAddSaving] = useState(false);
 
-  const fetchRecords = () => {
+  // Fetch attendance records
+  const fetchRecords = useCallback(() => {
     setLoading(true);
     const params = new URLSearchParams();
     if (filterDate)  params.append("date",  filterDate);
@@ -70,13 +109,22 @@ export default function AdminAttendance() {
         setRecords(r.data?.records ?? []);
         setSummary(r.data?.summary ?? null);
       })
-      .catch(e => toast({ title: "Error", description: e.message, variant: "destructive" }))
+      .catch(e => toast({ title: "Error loading attendance", description: e.message, variant: "destructive" }))
       .finally(() => setLoading(false));
-  };
+  }, [filterDate, filterClass]);
 
-  useEffect(() => { fetchRecords(); }, [filterDate, filterClass]);
+  // Fetch students for the Add dialog dropdown
+  useEffect(() => {
+    studentApi.getAll()
+      .then(r => setStudents(Array.isArray(r) ? r : r.data ?? []))
+      .catch(() => {}); // non-critical
+  }, []);
 
-  // Filter by search
+  useEffect(() => {
+    fetchRecords();
+  }, [fetchRecords]);
+
+  // Filtered records by search
   const filtered = records.filter(r => {
     const name = `${r.student?.firstName ?? ""} ${r.student?.lastName ?? ""}`.toLowerCase();
     const adm  = String(r.student?.admissionNo ?? "").toLowerCase();
@@ -85,9 +133,9 @@ export default function AdminAttendance() {
   });
 
   // Unique classes from loaded records
-  const classes = [...new Set(records.map(r => r.student?.class).filter(Boolean))].sort();
+  const classes = [...new Set(records.map(r => r.student?.class).filter(Boolean))].sort() as string[];
 
-  // Edit
+  // ── Edit ──────────────────────────────────────────────────────────────────
   const openEdit = (rec: any) => {
     setEditRec(rec);
     setEditStatus(rec.status);
@@ -98,14 +146,10 @@ export default function AdminAttendance() {
     if (!editRec) return;
     setEditSaving(true);
     try {
-      const r = await attendanceApi.update(editRec._id, { status: editStatus, remarks: editRemarks });
-      if (r.success) {
-        toast({ title: "Updated!" });
-        setEditRec(null);
-        fetchRecords();
-      } else {
-        toast({ title: "Error", description: r.message, variant: "destructive" });
-      }
+      await attendanceApi.update(editRec._id, { status: editStatus, remarks: editRemarks });
+      toast({ title: "Attendance updated!" });
+      setEditRec(null);
+      fetchRecords();
     } catch (e: any) {
       toast({ title: "Error", description: e.message, variant: "destructive" });
     } finally {
@@ -113,40 +157,39 @@ export default function AdminAttendance() {
     }
   };
 
-  // Delete
+  // ── Delete ────────────────────────────────────────────────────────────────
   const handleDelete = async (id: string) => {
     if (!window.confirm("Delete this attendance record?")) return;
     try {
       await attendanceApi.delete(id);
-      toast({ title: "Deleted" });
+      toast({ title: "Record deleted" });
       setRecords(prev => prev.filter(r => r._id !== id));
     } catch (e: any) {
       toast({ title: "Error", description: e.message, variant: "destructive" });
     }
   };
 
-  // Add
+  // ── Add ───────────────────────────────────────────────────────────────────
   const handleAdd = async () => {
     if (!addForm.studentId || !addForm.date || !addForm.status) {
-      toast({ title: "Fill all required fields", variant: "destructive" }); return;
+      toast({ title: "Missing fields", description: "Please fill all required fields.", variant: "destructive" });
+      return;
     }
     setAddSaving(true);
     try {
-      const r = await attendanceApi.create(addForm);
-      if (r.success) {
-        toast({ title: "Record added!" });
-        setShowAdd(false);
-        setAddForm({ studentId: "", date: new Date().toISOString().split("T")[0], status: "present", remarks: "" });
-        fetchRecords();
-      } else {
-        toast({ title: "Error", description: r.message, variant: "destructive" });
-      }
+      await attendanceApi.create(addForm);
+      toast({ title: "Record added!" });
+      setShowAdd(false);
+      setAddForm({ studentId: "", date: new Date().toISOString().split("T")[0], status: "present", remarks: "" });
+      fetchRecords();
     } catch (e: any) {
       toast({ title: "Error", description: e.message, variant: "destructive" });
     } finally {
       setAddSaving(false);
     }
   };
+
+  if (authLoading) return <div className="p-8 text-center">Loading...</div>;
 
   return (
     <AdminLayout title="Attendance">
@@ -156,10 +199,10 @@ export default function AdminAttendance() {
         {summary && (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {[
-              { label: "Total",      value: summary.total,   color: "text-foreground"  },
-              { label: "Present",    value: summary.present, color: "text-emerald-600" },
-              { label: "Absent",     value: summary.absent,  color: "text-red-500"     },
-              { label: "Rate",       value: `${summary.rate}%`, color: "text-blue-600" },
+              { label: "Total",   value: summary.total,      color: "text-foreground"  },
+              { label: "Present", value: summary.present,    color: "text-emerald-600" },
+              { label: "Absent",  value: summary.absent,     color: "text-red-500"     },
+              { label: "Rate",    value: `${summary.rate}%`, color: "text-blue-600"    },
             ].map(({ label, value, color }) => (
               <Card key={label}>
                 <CardContent className="p-4 text-center">
@@ -189,7 +232,7 @@ export default function AdminAttendance() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="relative">
+              <div>
                 <Label className="text-xs">Search</Label>
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
@@ -199,7 +242,7 @@ export default function AdminAttendance() {
               </div>
             </div>
             <div className="flex justify-between items-center">
-              <p className="text-xs text-muted-foreground">{filtered.length} records</p>
+              <p className="text-xs text-muted-foreground">{filtered.length} record{filtered.length !== 1 ? "s" : ""}</p>
               <Button size="sm" onClick={() => setShowAdd(true)} className="h-8 text-xs">
                 <Plus className="h-3.5 w-3.5 mr-1" /> Add Record
               </Button>
@@ -207,7 +250,7 @@ export default function AdminAttendance() {
           </CardContent>
         </Card>
 
-        {/* Records table */}
+        {/* Records list */}
         {loading ? (
           [...Array(5)].map((_, i) => <Skeleton key={i} className="h-14 rounded-lg" />)
         ) : filtered.length === 0 ? (
@@ -227,19 +270,24 @@ export default function AdminAttendance() {
                         {r.student?.firstName} {r.student?.lastName}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        #{r.student?.admissionNo} · {r.student?.class} · {new Date(r.date).toLocaleDateString()}
+                        #{r.student?.admissionNo} · {r.student?.class} · {formatDate(r.date)}
                       </p>
-                      {r.remarks && <p className="text-xs text-muted-foreground italic mt-0.5">"{r.remarks}"</p>}
+                      {r.remarks && (
+                        <p className="text-xs text-muted-foreground italic mt-0.5">"{r.remarks}"</p>
+                      )}
                     </div>
                     <div className="flex items-center gap-2 flex-shrink-0">
-                      <span className={cn("text-xs font-medium px-2 py-0.5 rounded-full capitalize", STATUS_BADGE[r.status])}>
+                      <span className={cn("text-xs font-medium px-2 py-0.5 rounded-full capitalize", STATUS_BADGE[r.status] ?? "")}>
                         {r.status}
                       </span>
                       <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(r)}>
                         <Pencil className="h-3.5 w-3.5" />
                       </Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:text-red-600 hover:bg-red-50"
-                        onClick={() => handleDelete(r._id)}>
+                      <Button
+                        variant="ghost" size="icon"
+                        className="h-7 w-7 text-red-500 hover:text-red-600 hover:bg-red-50"
+                        onClick={() => handleDelete(r._id)}
+                      >
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
                     </div>
@@ -252,14 +300,14 @@ export default function AdminAttendance() {
       </div>
 
       {/* Edit dialog */}
-      <Dialog open={!!editRec} onOpenChange={o => !o && setEditRec(null)}>
+      <Dialog open={!!editRec} onOpenChange={o => { if (!o) setEditRec(null); }}>
         <DialogContent className="w-[95vw] max-w-sm">
           <DialogHeader>
             <DialogTitle>Edit Attendance</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">
-              {editRec?.student?.firstName} {editRec?.student?.lastName} · {new Date(editRec?.date).toLocaleDateString()}
+              {editRec?.student?.firstName} {editRec?.student?.lastName} · {formatDate(editRec?.date)}
             </p>
             <div>
               <Label>Status *</Label>
@@ -284,14 +332,22 @@ export default function AdminAttendance() {
       </Dialog>
 
       {/* Add dialog */}
-      <Dialog open={showAdd} onOpenChange={o => !o && setShowAdd(false)}>
+      <Dialog open={showAdd} onOpenChange={o => { if (!o) setShowAdd(false); }}>
         <DialogContent className="w-[95vw] max-w-sm">
           <DialogHeader><DialogTitle>Add Attendance Record</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <div>
-              <Label>Student ID (MongoDB _id) *</Label>
-              <Input placeholder="Paste student _id"
-                value={addForm.studentId} onChange={e => setAddForm(f => ({ ...f, studentId: e.target.value }))} />
+              <Label>Student *</Label>
+              <Select value={addForm.studentId} onValueChange={v => setAddForm(f => ({ ...f, studentId: v }))}>
+                <SelectTrigger><SelectValue placeholder="Select a student" /></SelectTrigger>
+                <SelectContent>
+                  {students.map(s => (
+                    <SelectItem key={s._id} value={s._id}>
+                      {s.firstName} {s.lastName} — {s.admissionNo}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <Label>Date *</Label>

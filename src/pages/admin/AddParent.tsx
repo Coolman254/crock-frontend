@@ -25,6 +25,25 @@ function toArr(res: any): any[] {
   return [];
 }
 
+// Extract a readable error message from any error shape
+function getErrorMessage(e: any): string {
+  // Axios-style error with response body
+  const serverMsg =
+    e?.response?.data?.message ||
+    e?.response?.data?.error ||
+    e?.response?.data?.msg ||
+    (typeof e?.response?.data === "string" ? e.response.data : null);
+  if (serverMsg) return serverMsg;
+
+  // Network / status errors
+  if (e?.response?.status) {
+    return `Server error ${e.response.status} — check backend logs.`;
+  }
+
+  // Plain JS error
+  return e?.message || "Unknown error. Check console for details.";
+}
+
 export default function AddParentPage() {
   useRequireAuth("admin");
   const { toast }   = useToast();
@@ -74,7 +93,7 @@ export default function AddParentPage() {
           });
         }
       })
-      .catch(e => toast({ title: "Could not load students", description: e.message, variant: "destructive" }))
+      .catch(e => toast({ title: "Could not load students", description: getErrorMessage(e), variant: "destructive" }))
       .finally(() => setStudentsLoading(false));
   }, []);
 
@@ -104,6 +123,7 @@ export default function AddParentPage() {
 
   // Submit
   const handleCreate = async () => {
+    // ── Validation ──────────────────────────────────────────────
     if (!form.firstName || !form.lastName || !form.email ||
         !form.password  || !form.nationalId || !form.age ||
         !form.gender    || !form.relationship) {
@@ -122,22 +142,53 @@ export default function AddParentPage() {
       toast({ title: "No students linked", description: "Link at least one student.", variant: "destructive" });
       return;
     }
+
+    const age       = Number(form.age);
+    const nationalId = Number(form.nationalId);
+
+    if (isNaN(age) || age < 18) {
+      toast({ title: "Invalid age", description: "Age must be 18 or older.", variant: "destructive" });
+      return;
+    }
+    if (isNaN(nationalId) || nationalId <= 0) {
+      toast({ title: "Invalid National ID", description: "Please enter a valid National ID number.", variant: "destructive" });
+      return;
+    }
+
     setLoading(true);
+    let createdUserId: string | null = null;
+
+    // ── Step 1: Register auth account ───────────────────────────
     try {
-      await authApi.register({
-        name:     `${form.firstName} ${form.lastName}`,
+      const registered = await authApi.register({
+        name:     `${form.firstName.trim()} ${form.lastName.trim()}`,
         email:    form.email.trim().toLowerCase(),
         password: form.password,
         role:     "parent",
       });
+      // Grab the new user's ID so we can roll back if step 2 fails
+      createdUserId = registered?._id || registered?.user?._id || registered?.data?._id || null;
+    } catch (e: any) {
+      console.error("authApi.register failed:", e);
+      toast({
+        title: "Account registration failed",
+        description: getErrorMessage(e),
+        variant: "destructive",
+      });
+      setLoading(false);
+      return;
+    }
+
+    // ── Step 2: Create parent profile ───────────────────────────
+    try {
       await parentCrudApi.create({
         firstName:          form.firstName.trim(),
         lastName:           form.lastName.trim(),
         gender:             form.gender,
-        age:                Number(form.age),
+        age,
         email:              form.email.trim().toLowerCase(),
-        phone:              form.phone || undefined,
-        nationalId:         Number(form.nationalId),
+        phone:              form.phone.trim() || undefined,
+        nationalId,
         relationship:       form.relationship,
         notificationMethod: form.notificationMethod,
         linkedStudents:     selectedStudents.map(s => s._id),
@@ -145,7 +196,23 @@ export default function AddParentPage() {
       setDone(true);
       toast({ title: "Parent created!", description: `Linked to ${selectedStudents.length} student(s).` });
     } catch (e: any) {
-      toast({ title: "Error", description: e.message, variant: "destructive" });
+      console.error("parentCrudApi.create failed:", e);
+
+      // ── Rollback: delete the auth account we just created ─────
+      if (createdUserId) {
+        try {
+          await authApi.deleteUser(createdUserId);
+          console.log("Rolled back auth account successfully.");
+        } catch (rollbackErr) {
+          console.error("Rollback failed — orphaned auth account may exist:", rollbackErr);
+        }
+      }
+
+      toast({
+        title: "Failed to create parent",
+        description: getErrorMessage(e),
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
@@ -316,9 +383,9 @@ export default function AddParentPage() {
                 disabled={studentsLoading}
                 onChange={e => {
                   setStudentSearch(e.target.value);
-                  setDropdownOpen(true); // ✅ always open on any keystroke
+                  setDropdownOpen(true);
                 }}
-                onFocus={() => setDropdownOpen(true)} // ✅ open on focus too
+                onFocus={() => setDropdownOpen(true)}
               />
 
               {/* Dropdown */}

@@ -142,7 +142,6 @@ export const teacherApi = {
       body: JSON.stringify(data),
     }),
 
-  // ✅ Attendance — added
   getAttendance: (date?: string) =>
     request<{ data: any }>(`/api/teacher-dashboard/attendance${date ? `?date=${date}` : ""}`),
 
@@ -256,6 +255,10 @@ export const teacherCrudApi = {
     request<any>(`/api/teachers${params ? `?${params}` : ""}`),
   create: (data: any) =>
     request("/api/teachers", { method: "POST", body: JSON.stringify(data) }),
+  update: (id: string, data: any) =>
+    request(`/api/teachers/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  delete: (id: string) =>
+    request(`/api/teachers/${id}`, { method: "DELETE" }),
 };
 
 export const parentCrudApi = {
@@ -263,4 +266,8 @@ export const parentCrudApi = {
     request<any>(`/api/parents${params ? `?${params}` : ""}`),
   create: (data: any) =>
     request("/api/parents", { method: "POST", body: JSON.stringify(data) }),
+  update: (id: string, data: any) =>
+    request(`/api/parents/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  delete: (id: string) =>
+    request(`/api/parents/${id}`, { method: "DELETE" }),
 };

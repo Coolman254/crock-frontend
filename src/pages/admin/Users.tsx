@@ -51,7 +51,7 @@ export default function UsersPage() {
   const [roleFilter, setRoleFilter]     = useState("all");
   const [deleteTarget, setDeleteTarget] = useState<any>(null);
 
-  // Password reset dialog
+  // Password reset dialog (for admin/teacher/parent — User accounts)
   const [resetTarget, setResetTarget]   = useState<any>(null);
   const [newPassword, setNewPassword]   = useState("");
   const [confirmPw, setConfirmPw]       = useState("");
@@ -59,14 +59,14 @@ export default function UsersPage() {
   const [resetting, setResetting]       = useState(false);
   const [resetDone, setResetDone]       = useState(false);
 
-  // Student password dialog
-  const [studentTarget, setStudentTarget] = useState<any>(null);
-  const [studentAdmNo, setStudentAdmNo]   = useState("");
-  const [studentPw, setStudentPw]         = useState("");
-  const [studentConfirm, setStudentConfirm] = useState("");
-  const [showStudentPw, setShowStudentPw] = useState(false);
+  // Student portal password dialog
+  const [studentTarget, setStudentTarget]       = useState<any>(null);
+  const [studentAdmNo, setStudentAdmNo]         = useState("");
+  const [studentPw, setStudentPw]               = useState("");
+  const [studentConfirm, setStudentConfirm]     = useState("");
+  const [showStudentPw, setShowStudentPw]       = useState(false);
   const [settingStudentPw, setSettingStudentPw] = useState(false);
-  const [studentPwDone, setStudentPwDone] = useState(false);
+  const [studentPwDone, setStudentPwDone]       = useState(false);
 
   const fetchUsers = () => {
     setLoading(true);
@@ -91,13 +91,10 @@ export default function UsersPage() {
     }
   };
 
-  // ── Reset staff password ────────────────────────────────────────────────────
+  // ── Reset staff password (User accounts only) ───────────────────────────────
   const openReset = (u: any) => {
     setResetTarget(u);
-    setNewPassword("");
-    setConfirmPw("");
-    setShowPw(false);
-    setResetDone(false);
+    setNewPassword(""); setConfirmPw(""); setShowPw(false); setResetDone(false);
   };
 
   const handleReset = async () => {
@@ -122,11 +119,9 @@ export default function UsersPage() {
   // ── Student portal password ─────────────────────────────────────────────────
   const openStudentPw = (u: any) => {
     setStudentTarget(u);
-    setStudentAdmNo("");
-    setStudentPw("");
-    setStudentConfirm("");
-    setShowStudentPw(false);
-    setStudentPwDone(false);
+    // ✅ Pre-fill admission number if available from the student entry
+    setStudentAdmNo(u.admissionNo ? String(u.admissionNo) : "");
+    setStudentPw(""); setStudentConfirm(""); setShowStudentPw(false); setStudentPwDone(false);
   };
 
   const handleStudentPw = async () => {
@@ -155,29 +150,41 @@ export default function UsersPage() {
   // ── Filter ──────────────────────────────────────────────────────────────────
   const filtered = users.filter((u) => {
     const q = search.toLowerCase();
-    const matches = u.name?.toLowerCase().includes(q) || u.email?.toLowerCase().includes(q);
+    const matches =
+      u.name?.toLowerCase().includes(q) ||
+      u.email?.toLowerCase().includes(q) ||
+      // ✅ Also search by admission number for students
+      (u.admissionNo && String(u.admissionNo).toLowerCase().includes(q)) ||
+      (u.class && u.class.toLowerCase().includes(q));
     return matches && (roleFilter === "all" || u.role === roleFilter);
   });
 
-  const counts = { all: users.length, ...Object.fromEntries(["admin","teacher","student","parent"].map(r => [r, users.filter(u => u.role === r).length])) };
+  const counts = {
+    all: users.length,
+    ...Object.fromEntries(
+      ["admin","teacher","student","parent"].map(r => [r, users.filter(u => u.role === r).length])
+    )
+  };
 
   return (
     <AdminLayout title="Users">
       <div className="space-y-4">
 
-        {/* ── Toolbar ── */}
+        {/* Toolbar */}
         <div className="flex flex-col sm:flex-row gap-2 justify-between">
           <div className="flex gap-2 flex-1">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input placeholder="Search by name or email…" className="pl-9 h-10" value={search} onChange={e => setSearch(e.target.value)} />
+              <Input placeholder="Search name, email, admission no…" className="pl-9 h-10" value={search} onChange={e => setSearch(e.target.value)} />
             </div>
             <Select value={roleFilter} onValueChange={setRoleFilter}>
               <SelectTrigger className="w-36 h-10"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All ({counts.all})</SelectItem>
                 {["admin","teacher","student","parent"].map(r => (
-                  <SelectItem key={r} value={r} className="capitalize">{r[0].toUpperCase()+r.slice(1)} ({counts[r] ?? 0})</SelectItem>
+                  <SelectItem key={r} value={r} className="capitalize">
+                    {r[0].toUpperCase()+r.slice(1)} ({counts[r] ?? 0})
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -189,7 +196,7 @@ export default function UsersPage() {
 
         <p className="text-sm text-muted-foreground">{filtered.length} user{filtered.length !== 1 ? "s" : ""} found</p>
 
-        {/* ── List ── */}
+        {/* List */}
         {loading
           ? [...Array(5)].map((_, i) => <Skeleton key={i} className="h-16 rounded-xl" />)
           : filtered.length === 0
@@ -209,7 +216,14 @@ export default function UsersPage() {
                           <p className="font-medium text-sm truncate">{u.name}</p>
                           {isSelf && <span className="text-[10px] text-muted-foreground bg-muted px-1.5 rounded">(you)</span>}
                         </div>
-                        <p className="text-xs text-muted-foreground truncate">{u.email}</p>
+                        {/* ✅ Students show admission no + class, others show email */}
+                        {u.role === "student" && !u.isUserAccount ? (
+                          <p className="text-xs text-muted-foreground">
+                            Adm: {u.admissionNo} · {u.class}
+                          </p>
+                        ) : (
+                          <p className="text-xs text-muted-foreground truncate">{u.email}</p>
+                        )}
                       </div>
                     </div>
 
@@ -225,6 +239,7 @@ export default function UsersPage() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-48">
+                          {/* ✅ Students always use student-auth password, others use User password */}
                           {u.role === "student" ? (
                             <DropdownMenuItem onClick={() => openStudentPw(u)}>
                               <KeyRound className="h-4 w-4 mr-2 text-purple-500" />Set Portal Password
@@ -252,18 +267,15 @@ export default function UsersPage() {
         }
       </div>
 
-      {/* ── Reset Staff Password Dialog ── */}
+      {/* Reset Staff Password Dialog */}
       <Dialog open={!!resetTarget} onOpenChange={o => { if (!o && !resetting) { setResetTarget(null); setResetDone(false); } }}>
         <DialogContent className="w-[95vw] max-w-sm rounded-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <KeyRound className="h-5 w-5 text-blue-500" />Reset Password
             </DialogTitle>
-            <DialogDescription>
-              Set a new password for <b>{resetTarget?.name}</b>
-            </DialogDescription>
+            <DialogDescription>Set a new password for <b>{resetTarget?.name}</b></DialogDescription>
           </DialogHeader>
-
           {resetDone ? (
             <div className="py-6 flex flex-col items-center gap-3 text-center">
               <CheckCircle2 className="h-10 w-10 text-green-500" />
@@ -277,13 +289,8 @@ export default function UsersPage() {
                 <div className="space-y-1.5">
                   <Label>New Password</Label>
                   <div className="relative">
-                    <Input
-                      type={showPw ? "text" : "password"}
-                      placeholder="Min 6 characters"
-                      value={newPassword}
-                      onChange={e => setNewPassword(e.target.value)}
-                      className="h-11 pr-10"
-                    />
+                    <Input type={showPw ? "text" : "password"} placeholder="Min 6 characters"
+                      value={newPassword} onChange={e => setNewPassword(e.target.value)} className="h-11 pr-10" />
                     <button type="button" onClick={() => setShowPw(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
                       {showPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </button>
@@ -291,13 +298,9 @@ export default function UsersPage() {
                 </div>
                 <div className="space-y-1.5">
                   <Label>Confirm Password</Label>
-                  <Input
-                    type="password"
-                    placeholder="Repeat password"
-                    value={confirmPw}
+                  <Input type="password" placeholder="Repeat password" value={confirmPw}
                     onChange={e => setConfirmPw(e.target.value)}
-                    className={cn("h-11", confirmPw && confirmPw !== newPassword && "border-destructive")}
-                  />
+                    className={cn("h-11", confirmPw && confirmPw !== newPassword && "border-destructive")} />
                   {confirmPw && confirmPw !== newPassword && <p className="text-xs text-destructive">Passwords don't match</p>}
                 </div>
               </div>
@@ -312,7 +315,7 @@ export default function UsersPage() {
         </DialogContent>
       </Dialog>
 
-      {/* ── Student Portal Password Dialog ── */}
+      {/* Student Portal Password Dialog */}
       <Dialog open={!!studentTarget} onOpenChange={o => { if (!o && !settingStudentPw) { setStudentTarget(null); setStudentPwDone(false); } }}>
         <DialogContent className="w-[95vw] max-w-sm rounded-2xl">
           <DialogHeader>
@@ -320,10 +323,9 @@ export default function UsersPage() {
               <GraduationCap className="h-5 w-5 text-purple-500" />Set Student Portal Password
             </DialogTitle>
             <DialogDescription>
-              Students log in with their admission number. Enter it below along with a new password.
+              Students log in with their admission number. Confirm it below and set a password.
             </DialogDescription>
           </DialogHeader>
-
           {studentPwDone ? (
             <div className="py-6 flex flex-col items-center gap-3 text-center">
               <CheckCircle2 className="h-10 w-10 text-green-500" />
@@ -336,24 +338,15 @@ export default function UsersPage() {
               <div className="space-y-3 py-1">
                 <div className="space-y-1.5">
                   <Label>Admission Number</Label>
-                  <Input
-                    placeholder="e.g. 10045"
-                    value={studentAdmNo}
-                    onChange={e => setStudentAdmNo(e.target.value)}
-                    inputMode="numeric"
-                    className="h-11"
-                  />
+                  {/* ✅ Pre-filled from the student entry */}
+                  <Input placeholder="e.g. 10045" value={studentAdmNo}
+                    onChange={e => setStudentAdmNo(e.target.value)} inputMode="numeric" className="h-11" />
                 </div>
                 <div className="space-y-1.5">
                   <Label>New Password</Label>
                   <div className="relative">
-                    <Input
-                      type={showStudentPw ? "text" : "password"}
-                      placeholder="Min 6 characters"
-                      value={studentPw}
-                      onChange={e => setStudentPw(e.target.value)}
-                      className="h-11 pr-10"
-                    />
+                    <Input type={showStudentPw ? "text" : "password"} placeholder="Min 6 characters"
+                      value={studentPw} onChange={e => setStudentPw(e.target.value)} className="h-11 pr-10" />
                     <button type="button" onClick={() => setShowStudentPw(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
                       {showStudentPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </button>
@@ -361,13 +354,9 @@ export default function UsersPage() {
                 </div>
                 <div className="space-y-1.5">
                   <Label>Confirm Password</Label>
-                  <Input
-                    type="password"
-                    placeholder="Repeat password"
-                    value={studentConfirm}
+                  <Input type="password" placeholder="Repeat password" value={studentConfirm}
                     onChange={e => setStudentConfirm(e.target.value)}
-                    className={cn("h-11", studentConfirm && studentConfirm !== studentPw && "border-destructive")}
-                  />
+                    className={cn("h-11", studentConfirm && studentConfirm !== studentPw && "border-destructive")} />
                   {studentConfirm && studentConfirm !== studentPw && <p className="text-xs text-destructive">Passwords don't match</p>}
                 </div>
               </div>
@@ -382,13 +371,13 @@ export default function UsersPage() {
         </DialogContent>
       </Dialog>
 
-      {/* ── Delete Confirm ── */}
+      {/* Delete Confirm */}
       <AlertDialog open={!!deleteTarget} onOpenChange={o => !o && setDeleteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete user?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete <b>{deleteTarget?.name}</b> ({deleteTarget?.email}). This cannot be undone.
+              This will permanently delete <b>{deleteTarget?.name}</b>. This cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

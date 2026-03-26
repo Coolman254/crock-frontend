@@ -28,15 +28,18 @@ export default function AddTeacherPage() {
       toast({ title: "Missing fields", description: "All starred fields are required.", variant: "destructive" });
       return;
     }
+
     setLoading(true);
+
+    // Single call — createTeacher backend handles both User + Teacher creation atomically
+    // No rollback needed: if it fails, nothing was created
     try {
-      // ✅ Single call to /api/teachers — backend handles both User + Teacher creation
       await teacherCrudApi.create({
-        firstName: form.firstName,
-        lastName: form.lastName,
+        firstName: form.firstName.trim(),
+        lastName: form.lastName.trim(),
         gender: form.gender,
         age: Number(form.age),
-        email: form.email,
+        email: form.email.trim().toLowerCase(),
         password: form.password,
         phone: form.phone || undefined,
         teacherId: form.teacherId,
@@ -48,7 +51,7 @@ export default function AddTeacherPage() {
       toast({ title: "Teacher added!", description: `${form.firstName} ${form.lastName} created.` });
       navigate("/admin/teachers");
     } catch (e: any) {
-      toast({ title: "Error", description: e.message, variant: "destructive" });
+      toast({ title: "Failed to create teacher", description: e.message, variant: "destructive" });
     } finally {
       setLoading(false);
     }

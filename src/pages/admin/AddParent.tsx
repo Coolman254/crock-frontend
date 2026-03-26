@@ -25,25 +25,6 @@ function toArr(res: any): any[] {
   return [];
 }
 
-// Extract a readable error message from any error shape
-function getErrorMessage(e: any): string {
-  // Axios-style error with response body
-  const serverMsg =
-    e?.response?.data?.message ||
-    e?.response?.data?.error ||
-    e?.response?.data?.msg ||
-    (typeof e?.response?.data === "string" ? e.response.data : null);
-  if (serverMsg) return serverMsg;
-
-  // Network / status errors
-  if (e?.response?.status) {
-    return `Server error ${e.response.status} — check backend logs.`;
-  }
-
-  // Plain JS error
-  return e?.message || "Unknown error. Check console for details.";
-}
-
 export default function AddParentPage() {
   useRequireAuth("admin");
   const { toast }   = useToast();
@@ -93,7 +74,7 @@ export default function AddParentPage() {
           });
         }
       })
-      .catch(e => toast({ title: "Could not load students", description: getErrorMessage(e), variant: "destructive" }))
+      .catch(e => toast({ title: "Could not load students", description: e.message, variant: "destructive" }))
       .finally(() => setStudentsLoading(false));
   }, []);
 
@@ -143,7 +124,7 @@ export default function AddParentPage() {
       return;
     }
 
-    const age       = Number(form.age);
+    const age        = Number(form.age);
     const nationalId = Number(form.nationalId);
 
     if (isNaN(age) || age < 18) {
@@ -159,6 +140,7 @@ export default function AddParentPage() {
     let createdUserId: string | null = null;
 
     // ── Step 1: Register auth account ───────────────────────────
+    // authApi.register returns { token: string, role: string, user: { _id, ... } }
     try {
       const registered = await authApi.register({
         name:     `${form.firstName.trim()} ${form.lastName.trim()}`,
@@ -166,13 +148,20 @@ export default function AddParentPage() {
         password: form.password,
         role:     "parent",
       });
-      // Grab the new user's ID so we can roll back if step 2 fails
-      createdUserId = registered?._id || registered?.user?._id || registered?.data?._id || null;
+
+      // authApi.register returns { token, role, user: { id, ... } }
+      // Note: backend sends "id" not "_id" — see authController.js register()
+      createdUserId = registered?.user?.id ?? null;
+
+      if (!createdUserId) {
+        // Log the full response so we can debug if the shape ever changes
+        console.error("Could not extract user ID from register response:", registered);
+        throw new Error("Registration succeeded but returned no user ID. Check backend response.");
+      }
     } catch (e: any) {
-      console.error("authApi.register failed:", e);
       toast({
         title: "Account registration failed",
-        description: getErrorMessage(e),
+        description: e.message,
         variant: "destructive",
       });
       setLoading(false);
@@ -199,18 +188,17 @@ export default function AddParentPage() {
       console.error("parentCrudApi.create failed:", e);
 
       // ── Rollback: delete the auth account we just created ─────
-      if (createdUserId) {
-        try {
-          await authApi.deleteUser(createdUserId);
-          console.log("Rolled back auth account successfully.");
-        } catch (rollbackErr) {
-          console.error("Rollback failed — orphaned auth account may exist:", rollbackErr);
-        }
+      // createdUserId is guaranteed non-null here because we checked above
+      try {
+        await authApi.deleteUser(createdUserId);
+        console.log("Rolled back auth account successfully.");
+      } catch (rollbackErr) {
+        console.error("Rollback failed — orphaned auth account may exist for ID:", createdUserId, rollbackErr);
       }
 
       toast({
         title: "Failed to create parent",
-        description: getErrorMessage(e),
+        description: e.message,
         variant: "destructive",
       });
     } finally {

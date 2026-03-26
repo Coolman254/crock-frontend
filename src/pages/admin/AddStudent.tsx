@@ -1,205 +1,243 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
 import { AdminLayout } from "@/components/layout/AdminLayout";
 import { useRequireAuth } from "@/lib/auth";
-import { auth as authApi, parentCrudApi, studentCrudApi } from "@/lib/api";
+import { studentCrudApi } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
-import { X, Search } from "lucide-react";
+import { CheckCircle2, Loader2, GraduationCap } from "lucide-react";
 
-export default function AddParentPage() {
-  const { user, loading: authLoading } = useRequireAuth("admin");
-  const { toast } = useToast();
-  const navigate = useNavigate();
+export default function AddStudentPage() {
+  useRequireAuth("admin");
+  const { toast }  = useToast();
+  const navigate   = useNavigate();
+  const [loading, setLoading] = useState(false);
+  const [done, setDone]       = useState(false);
+  const [created, setCreated] = useState<any>(null);
 
   const [form, setForm] = useState({
-    firstName: "", lastName: "", gender: "Male", age: "",
-    email: "", password: "", phone: "",
-    nationalId: "", relationship: "Father",
-    notificationMethod: "app",
+    // Required
+    firstName:   "",
+    lastName:    "",
+    gender:      "Male",
+    age:         "",
+    admissionNo: "",
+    class:       "",
+    // Optional personal
+    email:       "",
+    subjects:    "",
+    // Optional parent info
+    parentName:  "",
+    parentPhone: "",
+    parentEmail: "",
+    // Optional finance
+    totalFees:   "",
+    amountPaid:  "",
   });
-
-  const [loading, setLoading] = useState(false);
-
-  // Student search & selection
-  const [allStudents, setAllStudents] = useState<any[]>([]);
-  const [studentSearch, setStudentSearch] = useState("");
-  const [selectedStudents, setSelectedStudents] = useState<any[]>([]);
 
   const f = (k: string, v: string) => setForm(p => ({ ...p, [k]: v }));
 
-  // Load all students on mount for linking
-  useEffect(() => {
-    studentCrudApi.getAll()
-      .then(r => setAllStudents(Array.isArray(r) ? r : r.data || []))
-      .catch(() => {});
-  }, []);
-
-  const filteredStudents = allStudents.filter(s =>
-    !selectedStudents.find(sel => sel._id === s._id) &&
-    (
-      `${s.firstName} ${s.lastName}`.toLowerCase().includes(studentSearch.toLowerCase()) ||
-      s.admissionNo?.toLowerCase().includes(studentSearch.toLowerCase())
-    )
-  );
-
-  const addStudent = (student: any) => {
-    setSelectedStudents(prev => [...prev, student]);
-    setStudentSearch("");
-  };
-
-  const removeStudent = (id: string) => {
-    setSelectedStudents(prev => prev.filter(s => s._id !== id));
-  };
-
   const handleCreate = async () => {
-    if (!form.firstName || !form.lastName || !form.email || !form.password || !form.nationalId || !form.age || !form.gender || !form.relationship) {
-      toast({ title: "Missing fields", description: "All starred fields are required.", variant: "destructive" });
+    // Validate required fields (matches backend: firstName, lastName, gender, age, admissionNo, class)
+    if (!form.firstName || !form.lastName || !form.gender || !form.age || !form.admissionNo || !form.class) {
+      toast({ title: "Missing fields", description: "First name, last name, gender, age, admission number and class are required.", variant: "destructive" });
       return;
     }
+
+    const age         = Number(form.age);
+    const admissionNo = Number(form.admissionNo);
+    const totalFees   = form.totalFees   ? Number(form.totalFees)   : 0;
+    const amountPaid  = form.amountPaid  ? Number(form.amountPaid)  : 0;
+
+    if (isNaN(age) || age <= 0) {
+      toast({ title: "Invalid age", description: "Age must be a positive number.", variant: "destructive" });
+      return;
+    }
+    if (isNaN(admissionNo) || admissionNo <= 0) {
+      toast({ title: "Invalid admission number", description: "Admission number must be a positive number.", variant: "destructive" });
+      return;
+    }
+    if (amountPaid > totalFees && totalFees > 0) {
+      toast({ title: "Invalid fees", description: "Amount paid cannot exceed total fees.", variant: "destructive" });
+      return;
+    }
+
     setLoading(true);
     try {
-      // 1. Create login account (User) — parent needs a login
-      await authApi.register({
-        name: `${form.firstName} ${form.lastName}`,
-        email: form.email,
-        password: form.password,
-        role: "parent",
+      // Single call — backend handles everything, no auth account needed for students
+      const res = await studentCrudApi.create({
+        firstName:   form.firstName.trim(),
+        lastName:    form.lastName.trim(),
+        gender:      form.gender,
+        age,
+        admissionNo,
+        class:       form.class.trim(),
+        email:       form.email.trim()       || undefined,
+        subjects:    form.subjects.trim()    || undefined,
+        parentName:  form.parentName.trim()  || undefined,
+        parentPhone: form.parentPhone.trim() || undefined,
+        parentEmail: form.parentEmail.trim() || undefined,
+        totalFees,
+        amountPaid,
       });
-
-      // 2. Create Parent profile with linked students
-      await parentCrudApi.create({
-        firstName: form.firstName,
-        lastName: form.lastName,
-        gender: form.gender,
-        age: Number(form.age),
-        email: form.email,
-        phone: form.phone || undefined,
-        nationalId: Number(form.nationalId),
-        relationship: form.relationship,
-        notificationMethod: form.notificationMethod,
-        // ✅ Send array of student MongoDB _ids
-        linkedStudents: selectedStudents.map(s => s._id),
-      });
-
-      toast({ title: "Parent added!", description: `${form.firstName} ${form.lastName} created and linked to ${selectedStudents.length} student(s).` });
-      navigate("/admin/parents");
+      setCreated(res?.student || res);
+      setDone(true);
+      toast({ title: "Student registered!", description: `${form.firstName} ${form.lastName} added successfully.` });
     } catch (e: any) {
-      toast({ title: "Error", description: e.message, variant: "destructive" });
+      toast({ title: "Failed to create student", description: e.message, variant: "destructive" });
     } finally {
       setLoading(false);
     }
   };
 
-  return (
-    <AdminLayout title="Add Parent">
+  const resetForm = () => {
+    setForm({
+      firstName: "", lastName: "", gender: "Male", age: "", admissionNo: "",
+      class: "", email: "", subjects: "", parentName: "", parentPhone: "",
+      parentEmail: "", totalFees: "", amountPaid: "",
+    });
+    setDone(false);
+    setCreated(null);
+  };
+
+  // ── Success screen ────────────────────────────────────────────────────────
+  if (done) return (
+    <AdminLayout title="Add Student">
       <Card className="max-w-lg">
-        <CardHeader><CardTitle className="text-base">New Parent</CardTitle></CardHeader>
+        <CardContent className="py-12 flex flex-col items-center gap-4 text-center">
+          <div className="w-16 h-16 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
+            <CheckCircle2 className="h-8 w-8 text-green-600" />
+          </div>
+          <div>
+            <p className="font-semibold text-green-700 dark:text-green-400 text-lg">Student Registered!</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              {form.firstName} {form.lastName} has been added.
+            </p>
+          </div>
+          {created && (
+            <div className="w-full bg-muted/40 rounded-lg p-3 text-left space-y-1 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Admission No</span>
+                <span className="font-medium">#{created.admissionNo}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Class</span>
+                <span className="font-medium">{created.class}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Gender</span>
+                <span className="font-medium">{created.gender}</span>
+              </div>
+              {created.email && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Email</span>
+                  <span className="font-medium">{created.email}</span>
+                </div>
+              )}
+            </div>
+          )}
+          <div className="flex gap-2 mt-2">
+            <Button variant="outline" size="sm" onClick={() => navigate("/admin/students")}>
+              View All Students
+            </Button>
+            <Button size="sm" onClick={resetForm}>
+              Add Another
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    </AdminLayout>
+  );
+
+  // ── Form ──────────────────────────────────────────────────────────────────
+  return (
+    <AdminLayout title="Add Student">
+      <Card className="max-w-lg">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <GraduationCap className="h-4 w-4" /> New Student
+          </CardTitle>
+        </CardHeader>
         <CardContent className="space-y-4">
 
-          {/* Name */}
+          {/* Required fields */}
           <div className="grid grid-cols-2 gap-3">
             <div><Label>First Name *</Label><Input value={form.firstName} onChange={e => f("firstName", e.target.value)} /></div>
             <div><Label>Last Name *</Label><Input value={form.lastName} onChange={e => f("lastName", e.target.value)} /></div>
           </div>
 
-          {/* Gender & Age */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label>Gender *</Label>
               <Select value={form.gender} onValueChange={v => f("gender", v)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>{["Male","Female","Other"].map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}</SelectContent>
+                <SelectContent>
+                  {["Male", "Female", "Other"].map(g => (
+                    <SelectItem key={g} value={g}>{g}</SelectItem>
+                  ))}
+                </SelectContent>
               </Select>
             </div>
-            <div><Label>Age *</Label><Input type="number" value={form.age} onChange={e => f("age", e.target.value)} /></div>
+            <div><Label>Age *</Label><Input type="number" min={1} value={form.age} onChange={e => f("age", e.target.value)} /></div>
           </div>
 
-          {/* Email & Password */}
-          <div><Label>Email * (used for login)</Label><Input type="email" value={form.email} onChange={e => f("email", e.target.value)} placeholder="parent@example.com" /></div>
-          <div><Label>Login Password *</Label><Input type="password" value={form.password} onChange={e => f("password", e.target.value)} placeholder="Min 8 characters" /></div>
-
-          {/* Phone & National ID */}
-          <div className="grid grid-cols-2 gap-3">
-            <div><Label>Phone</Label><Input value={form.phone} onChange={e => f("phone", e.target.value)} /></div>
-            <div><Label>National ID *</Label><Input type="number" value={form.nationalId} onChange={e => f("nationalId", e.target.value)} /></div>
-          </div>
-
-          {/* Relationship & Notification */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label>Relationship *</Label>
-              <Select value={form.relationship} onValueChange={v => f("relationship", v)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>{["Father","Mother","Guardian","Other"].map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}</SelectContent>
-              </Select>
+              <Label>Admission No *</Label>
+              <Input type="number" value={form.admissionNo} onChange={e => f("admissionNo", e.target.value)} placeholder="e.g. 1001" />
+              <p className="text-[11px] text-muted-foreground mt-1">Must be unique — numbers only</p>
             </div>
             <div>
-              <Label>Notification Method</Label>
-              <Select value={form.notificationMethod} onValueChange={v => f("notificationMethod", v)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>{["app","sms","email"].map(n => <SelectItem key={n} value={n} className="capitalize">{n}</SelectItem>)}</SelectContent>
-              </Select>
+              <Label>Class *</Label>
+              <Input value={form.class} onChange={e => f("class", e.target.value)} placeholder="e.g. Form 2" />
             </div>
           </div>
 
-          {/* ✅ Student linking — search and select */}
-          <div>
-            <Label>Link Students</Label>
-            <p className="text-[11px] text-muted-foreground mb-1">Search by name or admission number</p>
-
-            {/* Selected students */}
-            {selectedStudents.length > 0 && (
-              <div className="flex flex-wrap gap-1 mb-2">
-                {selectedStudents.map(s => (
-                  <Badge key={s._id} variant="secondary" className="flex items-center gap-1 text-xs">
-                    {s.firstName} {s.lastName} ({s.admissionNo})
-                    <button onClick={() => removeStudent(s._id)} className="ml-1 hover:text-red-500">
-                      <X className="h-3 w-3" />
-                    </button>
-                  </Badge>
-                ))}
-              </div>
-            )}
-
-            {/* Search input */}
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                className="pl-9"
-                placeholder="Search student..."
-                value={studentSearch}
-                onChange={e => setStudentSearch(e.target.value)}
-              />
+          {/* Optional personal */}
+          <div className="border-t pt-4 space-y-3">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Optional Details</p>
+            <div>
+              <Label>Email</Label>
+              <Input type="email" value={form.email} onChange={e => f("email", e.target.value)} placeholder="student@example.com" />
             </div>
-
-            {/* Dropdown results */}
-            {studentSearch && filteredStudents.length > 0 && (
-              <div className="border rounded-md mt-1 max-h-40 overflow-y-auto bg-background shadow-sm z-10">
-                {filteredStudents.slice(0, 8).map(s => (
-                  <button
-                    key={s._id}
-                    className="w-full text-left px-3 py-2 text-sm hover:bg-muted transition-colors"
-                    onClick={() => addStudent(s)}
-                  >
-                    {s.firstName} {s.lastName}
-                    <span className="text-muted-foreground ml-2 text-xs">#{s.admissionNo}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-            {studentSearch && filteredStudents.length === 0 && (
-              <p className="text-xs text-muted-foreground mt-1 px-1">No students found</p>
-            )}
+            <div>
+              <Label>Subjects</Label>
+              <Input value={form.subjects} onChange={e => f("subjects", e.target.value)} placeholder="Math, English, Science" />
+              <p className="text-[11px] text-muted-foreground mt-1">Comma-separated list</p>
+            </div>
           </div>
 
-          <Button className="w-full" onClick={handleCreate} disabled={loading}>
-            {loading ? "Creating..." : "Create Parent"}
+          {/* Parent info */}
+          <div className="border-t pt-4 space-y-3">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Parent / Guardian Info</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>Parent Name</Label><Input value={form.parentName} onChange={e => f("parentName", e.target.value)} /></div>
+              <div><Label>Parent Phone</Label><Input value={form.parentPhone} onChange={e => f("parentPhone", e.target.value)} placeholder="+254..." /></div>
+            </div>
+            <div>
+              <Label>Parent Email</Label>
+              <Input type="email" value={form.parentEmail} onChange={e => f("parentEmail", e.target.value)} />
+            </div>
+          </div>
+
+          {/* Finance */}
+          <div className="border-t pt-4 space-y-3">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Fees</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>Total Fees (KSH)</Label><Input type="number" min={0} value={form.totalFees} onChange={e => f("totalFees", e.target.value)} placeholder="0" /></div>
+              <div><Label>Amount Paid (KSH)</Label><Input type="number" min={0} value={form.amountPaid} onChange={e => f("amountPaid", e.target.value)} placeholder="0" /></div>
+            </div>
+          </div>
+
+          <Button className="w-full h-11 font-semibold mt-2" onClick={handleCreate} disabled={loading}>
+            {loading
+              ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Registering…</>
+              : <><GraduationCap className="h-4 w-4 mr-2" />Register Student</>
+            }
           </Button>
 
         </CardContent>

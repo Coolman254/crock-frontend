@@ -4,7 +4,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -12,7 +11,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   Search, Plus, Trash2, GraduationCap, UserCheck, Users,
-  Phone, Mail, BookOpen, Hash, CreditCard,
+  Phone, Mail, BookOpen, Hash,
 } from "lucide-react";
 import { AdminLayout } from "@/components/layout/AdminLayout";
 import { useRequireAuth } from "@/lib/auth";
@@ -26,30 +25,10 @@ const CONFIG: Record<RecordType, {
   title: string;
   addPath: string;
   icon: React.ElementType;
-  color: string;
-  badge: string;
 }> = {
-  students: {
-    title: "Students",
-    addPath: "/admin/add-student",
-    icon: GraduationCap,
-    color: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400",
-    badge: "purple",
-  },
-  teachers: {
-    title: "Teachers",
-    addPath: "/admin/add-teacher",
-    icon: UserCheck,
-    color: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
-    badge: "blue",
-  },
-  parents: {
-    title: "Parents",
-    addPath: "/admin/add-parent",
-    icon: Users,
-    color: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
-    badge: "green",
-  },
+  students: { title: "Students", addPath: "/admin/add-student", icon: GraduationCap },
+  teachers: { title: "Teachers", addPath: "/admin/add-teacher", icon: UserCheck },
+  parents:  { title: "Parents",  addPath: "/admin/add-parent",  icon: Users },
 };
 
 function StudentCard({ s, onDelete }: { s: any; onDelete: () => void }) {
@@ -81,18 +60,14 @@ function StudentCard({ s, onDelete }: { s: any; onDelete: () => void }) {
             </div>
           </div>
           <div className="flex flex-col items-end gap-2 flex-shrink-0">
-            <Button
-              variant="ghost" size="icon"
+            <Button variant="ghost" size="icon"
               className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-              onClick={onDelete}
-            >
+              onClick={onDelete}>
               <Trash2 className="h-3.5 w-3.5" />
             </Button>
-            <div className="text-right">
-              <p className={cn("text-xs font-semibold", balance > 0 ? "text-orange-600" : "text-green-600")}>
-                {balance > 0 ? `Owe KSH ${balance.toLocaleString()}` : "Cleared"}
-              </p>
-            </div>
+            <p className={cn("text-xs font-semibold", balance > 0 ? "text-orange-600" : "text-green-600")}>
+              {balance > 0 ? `Owe KSH ${balance.toLocaleString()}` : "Cleared"}
+            </p>
           </div>
         </div>
       </CardContent>
@@ -130,11 +105,9 @@ function TeacherCard({ t, onDelete }: { t: any; onDelete: () => void }) {
               )}
             </div>
           </div>
-          <Button
-            variant="ghost" size="icon"
+          <Button variant="ghost" size="icon"
             className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10 flex-shrink-0"
-            onClick={onDelete}
-          >
+            onClick={onDelete}>
             <Trash2 className="h-3.5 w-3.5" />
           </Button>
         </div>
@@ -160,9 +133,11 @@ function ParentCard({ p, onDelete }: { p: any; onDelete: () => void }) {
                 <Badge variant="outline" className="text-[10px] px-1.5 py-0">{p.relationship}</Badge>
                 <Badge variant="outline" className="text-[10px] px-1.5 py-0">{p.gender}</Badge>
               </div>
-              <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
-                <Mail className="h-3 w-3" />{p.email}
-              </p>
+              {p.email && (
+                <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
+                  <Mail className="h-3 w-3" />{p.email}
+                </p>
+              )}
               {p.phone && (
                 <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
                   <Phone className="h-3 w-3" />{p.phone}
@@ -170,11 +145,9 @@ function ParentCard({ p, onDelete }: { p: any; onDelete: () => void }) {
               )}
             </div>
           </div>
-          <Button
-            variant="ghost" size="icon"
+          <Button variant="ghost" size="icon"
             className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10 flex-shrink-0"
-            onClick={onDelete}
-          >
+            onClick={onDelete}>
             <Trash2 className="h-3.5 w-3.5" />
           </Button>
         </div>
@@ -190,22 +163,22 @@ export default function RecordsPage() {
   const { toast } = useToast();
 
   const type = (location.pathname.split("/admin/")[1] as RecordType) || "students";
-  const cfg = CONFIG[type] || CONFIG.students;
+  const cfg  = CONFIG[type] || CONFIG.students;
   const Icon = cfg.icon;
 
-  const [records, setRecords] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
+  const [records, setRecords]           = useState<any[]>([]);
+  const [loading, setLoading]           = useState(true);
+  const [search, setSearch]             = useState("");
   const [deleteTarget, setDeleteTarget] = useState<any>(null);
+  const [deleting, setDeleting]         = useState(false);
 
   const fetchRecords = async () => {
     setLoading(true);
     try {
       let res: any;
-      if (type === "students") res = await studentCrudApi.getAll();
+      if (type === "students")      res = await studentCrudApi.getAll();
       else if (type === "teachers") res = await teacherCrudApi.getAll();
-      else res = await parentCrudApi.getAll();
-      // backend may return { data: [] } or just []
+      else                          res = await parentCrudApi.getAll();
       setRecords(Array.isArray(res) ? res : res.data ?? res.students ?? res.teachers ?? res.parents ?? []);
     } catch (e: any) {
       toast({ title: "Error loading records", description: e.message, variant: "destructive" });
@@ -221,30 +194,31 @@ export default function RecordsPage() {
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
+    setDeleting(true);
     try {
-      if (type === "students") await studentCrudApi.delete(deleteTarget._id);
-      // teachers/parents delete not wired — show message
-      else {
-        toast({ title: "Info", description: "Delete for this record type is not yet available via API.", variant: "destructive" });
-        setDeleteTarget(null);
-        return;
-      }
+      // All three types now wired up correctly
+      if (type === "students")      await studentCrudApi.delete(deleteTarget._id);
+      else if (type === "teachers") await teacherCrudApi.delete(deleteTarget._id);
+      else                          await parentCrudApi.delete(deleteTarget._id);
+
       toast({ title: "Deleted", description: `${deleteTarget.firstName} ${deleteTarget.lastName} removed.` });
       setDeleteTarget(null);
       fetchRecords();
     } catch (e: any) {
-      toast({ title: "Error", description: e.message, variant: "destructive" });
+      toast({ title: "Delete failed", description: e.message, variant: "destructive" });
+    } finally {
+      setDeleting(false);
     }
   };
 
   const filtered = records.filter((r) => {
-    const q = search.toLowerCase();
+    const q    = search.toLowerCase();
     const name = `${r.firstName ?? ""} ${r.lastName ?? ""}`.toLowerCase();
     return (
       name.includes(q) ||
       r.email?.toLowerCase().includes(q) ||
       String(r.admissionNo ?? "").includes(q) ||
-      String(r.teacherId ?? "").includes(q) ||
+      String(r.teacherId  ?? "").includes(q) ||
       r.class?.toLowerCase().includes(q) ||
       r.subject?.toLowerCase().includes(q)
     );
@@ -305,22 +279,24 @@ export default function RecordsPage() {
         )}
       </div>
 
-      {/* Delete confirm */}
+      {/* Delete confirm dialog */}
       <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete record?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently remove <b>{deleteTarget?.firstName} {deleteTarget?.lastName}</b>'s profile. This cannot be undone.
+              This will permanently remove <b>{deleteTarget?.firstName} {deleteTarget?.lastName}</b>'s
+              profile. This cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDelete}
+              disabled={deleting}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Delete
+              {deleting ? "Deleting…" : "Delete"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

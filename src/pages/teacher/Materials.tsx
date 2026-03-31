@@ -47,52 +47,49 @@ export default function TeacherMaterials() {
 
   // ── Fetch materials ────────────────────────────────────────
   // calls GET /api/teacher-dashboard/materials
-  const fetchMaterials = () => {
-    setLoading(true);
-    teacherApi
-      .getMaterials()
-      .then(r => setMaterials(toArr(r)))
-      .catch(e => toast({ title: "Error", description: e.message, variant: "destructive" }))
-      .finally(() => setLoading(false));
-  };
+  const fetchMaterials = (showSkeleton = false) => {
+  if (showSkeleton) setLoading(true);
+  teacherApi
+    .getMaterials()
+    .then(r => setMaterials(toArr(r)))
+    .catch(e => toast({ title: "Error", description: e.message, variant: "destructive" }))
+    .finally(() => setLoading(false));
+};
 
-  useEffect(() => {
-    if (!authLoading && user) fetchMaterials();
-  }, [authLoading, user]);
-
+useEffect(() => {
+  if (!authLoading && user) fetchMaterials(true);
+}, [authLoading, user]);
   // ── Upload material ────────────────────────────────────────
   // calls POST /api/teacher-dashboard/materials (multipart)
   const handleUpload = async () => {
     if (!file || !form.title || !form.class) {
-      toast({ title: "Title, class and file are required", variant: "destructive" });
-      return;
-    }
+    toast({ title: "Title, class and file are required", variant: "destructive" });
+    return;
+   }
     setUploading(true);
     const fd = new FormData();
-    fd.append("file", file);
-    fd.append("title", form.title);
-    fd.append("subject", form.subject);
-    fd.append("class", form.class);
-    fd.append("description", form.description);
+     fd.append("file", file);
+     fd.append("title", form.title);
+     fd.append("subject", form.subject);
+     fd.append("class", form.class);
+     fd.append("description", form.description);
 
     try {
       const r = await teacherApi.uploadMaterial(fd);
-      // Success: backend returned an object with _id, or no explicit failure
-      const failed = r?.success === false || (r?.message && !r?._id);
-      if (failed) {
-        toast({ title: "Upload failed", description: r.message, variant: "destructive" });
-      } else {
-        toast({ title: "Uploaded!", description: `Material available to class ${form.class}` });
-        setShowDialog(false);
-        setFile(null);
-        setForm({ title: "", subject: "", class: "", description: "" });
-        fetchMaterials();
-      }
+      if (r?.success !== true) {
+        toast({ title: "Upload failed", description: r?.message, variant: "destructive" });
+    } else {
+      toast({ title: "Uploaded!", description: `Material available to class ${form.class}` });
+      setShowDialog(false);
+      setFile(null);
+      setForm({ title: "", subject: "", class: "", description: "" });
+      fetchMaterials(true); // ← refetch instead of direct state update (safer)
+     }
     } catch (e: any) {
-      toast({ title: "Error", description: e.message, variant: "destructive" });
+    toast({ title: "Error", description: e.message, variant: "destructive" });
     } finally {
-      setUploading(false);
-    }
+     setUploading(false);
+     }
   };
 
   // ── Delete material ────────────────────────────────────────

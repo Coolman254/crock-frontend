@@ -38,9 +38,6 @@ export default function StudentMaterials() {
   const [search, setSearch]           = useState("");
   const [downloading, setDownloading] = useState<string | null>(null);
 
-  // ── Fetch materials ────────────────────────────────────────
-  // calls GET /api/student-dashboard/materials
-  // backend auto-filters by the logged-in student's class
   useEffect(() => {
     if (authLoading || !user) return;
     studentApi
@@ -50,7 +47,6 @@ export default function StudentMaterials() {
       .finally(() => setLoading(false));
   }, [authLoading, user]);
 
-  // ── Search filter ──────────────────────────────────────────
   const filtered = materials.filter(m => {
     const q = search.toLowerCase();
     return (
@@ -61,29 +57,11 @@ export default function StudentMaterials() {
     );
   });
 
-  // ── Download with auth header ──────────────────────────────
-  // calls GET /api/student-dashboard/materials/:id/download
+  // ✅ FIXED: calls studentApi.downloadMaterial which sends the Authorization header
   const handleDownload = async (m: any) => {
     setDownloading(m._id);
     try {
-      const token = localStorage.getItem("token");
-      const url = studentApi.getMaterialDownloadUrl(m._id);
-
-      const res = await fetch(url, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-
-      if (!res.ok) throw new Error(`Download failed: ${res.statusText}`);
-
-      const blob = await res.blob();
-      const bUrl = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = bUrl;
-      link.download = m.fileName || m.title || "material";
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(bUrl);
+      await studentApi.downloadMaterial(m._id, m.fileName || m.title || "material");
     } catch (e: any) {
       toast({ title: "Download failed", description: e.message, variant: "destructive" });
     } finally {
@@ -162,12 +140,15 @@ export default function StudentMaterials() {
                       {(m.fileSize / 1024 / 1024).toFixed(1)} MB
                     </Badge>
                   )}
-                  <Button size="sm" variant="outline"
+                  <Button
+                    size="sm"
+                    variant="outline"
                     onClick={() => handleDownload(m)}
-                    disabled={downloading === m._id}>
+                    disabled={downloading === m._id}
+                  >
                     <Download className="h-4 w-4 sm:mr-1" />
                     <span className="hidden sm:inline">
-                      {downloading === m._id ? "..." : "Download"}
+                      {downloading === m._id ? "Downloading..." : "Download"}
                     </span>
                   </Button>
                 </div>

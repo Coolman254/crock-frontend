@@ -1,4 +1,4 @@
-// Central API client — replaces Supabase
+// Central API client
 const BASE = (import.meta.env.VITE_API_URL as string) || "http://localhost:5000";
 
 function getToken(): string | null {
@@ -37,17 +37,14 @@ export const auth = {
       body: JSON.stringify({ email, password, role }),
     }),
 
-  // Returns { success, token, data: { ...studentFields } }
   studentLogin: (admissionNo: string, password: string) =>
     request<{ success: boolean; token: string; data: any }>("/api/student-auth/login", {
       method: "POST",
       body: JSON.stringify({ admissionNo, password }),
     }),
 
-  // Staff /me — returns { user: { ...userFields } }
   getMe: () => request<{ user: any }>("/api/auth/me"),
 
-  // Student /me — returns { success, data: { ...studentFields } }
   getStudentMe: () => request<{ success: boolean; data: any }>("/api/student-auth/me"),
 
   register: (data: { name: string; email: string; password: string; role: string }) =>
@@ -73,12 +70,6 @@ export const auth = {
 };
 
 // ── Student dashboard ─────────────────────────────────────────────────────────
-//
-// The backend returns:
-//   { success: true, data: { student, stats, finance, announcements, upcomingAssignments } }
-//
-// request() does res.json(), so the caller receives the full envelope.
-// In components, use  r.data  to get the inner object.
 
 export const studentApi = {
   getDashboard: () =>
@@ -103,8 +94,29 @@ export const studentApi = {
   getMaterials: () =>
     request<ApiSuccess<any[]>>("/api/student-dashboard/materials"),
 
-  getMaterialDownloadUrl: (id: string) =>
-    `${BASE}/api/student-dashboard/materials/${id}/download`,
+  // ✅ FIXED: authenticated download — sends Bearer token so protect() doesn't block it
+  downloadMaterial: async (id: string, fileName: string): Promise<void> => {
+    const token = getToken();
+    const res = await fetch(`${BASE}/api/student-dashboard/materials/${id}/download`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+
+    if (!res.ok) {
+      // Try to parse error message from JSON body
+      const errBody = await res.json().catch(() => ({}));
+      throw new Error(errBody.message || `Download failed (${res.status})`);
+    }
+
+    const blob = await res.blob();
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href     = url;
+    a.download = fileName || "material";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  },
 
   submitAssignment: (id: string, formData: FormData) => {
     const token = getToken();

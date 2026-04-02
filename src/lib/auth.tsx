@@ -1,122 +1,125 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { auth } from "./api";
+import { auth } from "@/lib/api";
 
-interface AuthUser {
-  id: string;
-  name: string;
-  email: string;
-  role: string;
-  // for students: admission number used instead of email
-  admissionNo?: string | number;
-}
+// ── Types ─────────────────────────────────────────────────────────────────────
 
-interface AuthContextType {
-  user: AuthUser | null;
-  token: string | null;
+interface AuthContextValue {
+  user: any | null;
   loading: boolean;
-  login: (emailOrAdmNo: string, password: string, role: string) => Promise<void>;
+  login: (identifier: string, password: string, role: string) => Promise<void>;
   logout: () => void;
 }
 
-const AuthContext = createContext<AuthContextType | null>(null);
+// ── Context ───────────────────────────────────────────────────────────────────
+
+const AuthContext = createContext<AuthContextValue | null>(null);
+
+// ── AuthProvider — wraps the whole app in App.tsx ─────────────────────────────
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(null);
-  const [token, setToken] = useState<string | null>(localStorage.getItem("token"));
+  const [user, setUser]       = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // On mount, rehydrate from token if one exists
   useEffect(() => {
-    const t = localStorage.getItem("token");
-    const role = localStorage.getItem("userRole");
-    if (t) {
-      // Students use student-auth/me, others use auth/me
-      const meCall = role === "student" ? auth.getStudentMe() : auth.getMe();
-      meCall
-        .then((data: any) => {
-          if (role === "student") {
-            const s = data.data;
-            setUser({
-              id: s._id,
-              name: `${s.firstName} ${s.lastName}`,
-              email: s.email || "",
-              role: "student",
-              admissionNo: s.admissionNo,
-            });
-          } else {
-            setUser(data.user);
-          }
-        })
-        .catch(() => {
-          localStorage.removeItem("token");
-          localStorage.removeItem("userRole");
-          setToken(null);
-        })
-        .finally(() => setLoading(false));
-    } else {
-      setLoading(false);
-    }
+    const token = localStorage.getItem("token");
+    if (!token) { setLoading(false); return; }
+
+    const storedRole = localStorage.getItem("role");
+    const meCall = storedRole === "student" ? auth.getStudentMe() : auth.getMe();
+
+    meCall
+      .then((res: any) => setUser(res.data ?? res.user ?? null))
+      .catch(() => {
+        localStorage.removeItem("token");
+        localStorage.removeItem("role");
+      })
+      .finally(() => setLoading(false));
   }, []);
 
-  const login = useCallback(async (emailOrAdmNo: string, password: string, role: string) => {
+  // Called by Login.tsx: login(identifier, password, role)
+  const login = async (identifier: string, password: string, role: string) => {
+    let token: string;
+    let userData: any;
+
     if (role === "student") {
-      const data = await auth.studentLogin(emailOrAdmNo, password);
-      if (!data.success) throw new Error("Login failed");
-      localStorage.setItem("token", data.token);
-      localStorage.setItem("userRole", "student");
-      setToken(data.token);
-      const s = data.data;
-      setUser({
-        id: s._id,
-        name: `${s.firstName} ${s.lastName}`,
-        email: s.email || "",
-        role: "student",
-        admissionNo: s.admissionNo,
-      });
+      const res = await auth.studentLogin(identifier, password);
+      // { success, token, data: { ...studentFields } }
+      token    = res.token;
+      userData = res.data;
     } else {
-      const data = await auth.login(emailOrAdmNo, password, role);
-      localStorage.setItem("token", data.token);
-      localStorage.setItem("userRole", role);
-      setToken(data.token);
-      setUser(data.user);
+      const res = await auth.login(identifier, password, role);
+      // { token, role, user: { ...userFields } }
+      token    = res.token;
+      userData = res.user;
     }
-  }, []);
 
-  const logout = useCallback(() => {
+    localStorage.setItem("token", token);
+    localStorage.setItem("role", role);
+    setUser(userData);
+  };
+
+  const logout = () => {
     localStorage.removeItem("token");
-    localStorage.removeItem("userRole");
-    setToken(null);
+    localStorage.removeItem("role");
     setUser(null);
-  }, []);
+  };
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, logout }}>
       {children}
     </AuthContext.Provider>
   );
 }
 
-export function useAuth() {
+// ── useAuth — used by Login.tsx ───────────────────────────────────────────────
+
+export function useAuth(): AuthContextValue {
   const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error("useAuth must be inside AuthProvider");
+  if (!ctx) throw new Error("useAuth must be used inside <AuthProvider>");
   return ctx;
 }
 
+// ── useRequireAuth — used by every dashboard page ─────────────────────────────
+
 export function useRequireAuth(requiredRole?: string) {
-  const { user, loading } = useAuth();
   const navigate = useNavigate();
+  const [user, setUser]       = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (loading) return;
-    if (!user) { navigate("/login"); return; }
-    if (requiredRole && user.role !== requiredRole) { navigate("/login"); }
-  }, [user, loading, navigate, requiredRole]);
+    const token = localStorage.getItem("token");
+    if (!token) { navigate("/login"); return; }
+
+    const meCall = requiredRole === "student"
+      ? auth.getStudentMe()
+      : auth.getMe();
+
+    meCall
+      .then((res: any) => {
+        const userData = res.data ?? res.user;
+        if (!userData) { navigate("/login"); return; }
+        setUser(userData);
+      })
+      .catch(() => {
+        localStorage.removeItem("token");
+        localStorage.removeItem("role");
+        navigate("/login");
+      })
+      .finally(() => setLoading(false));
+  }, [navigate, requiredRole]);
 
   return { user, loading };
 }
 
+// ── useSignOut — used by dashboard headers ────────────────────────────────────
+
 export function useSignOut() {
-  const { logout } = useAuth();
   const navigate = useNavigate();
-  return () => { logout(); navigate("/login"); };
+  return () => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("role");
+    navigate("/login");
+  };
 }

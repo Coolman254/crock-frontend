@@ -21,6 +21,13 @@ async function request<T = any>(path: string, options: RequestInit = {}): Promis
   return res.json();
 }
 
+// ── Shared response shapes ────────────────────────────────────────────────────
+
+interface ApiSuccess<T> {
+  success: boolean;
+  data: T;
+}
+
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
 export const auth = {
@@ -30,13 +37,17 @@ export const auth = {
       body: JSON.stringify({ email, password, role }),
     }),
 
+  // Returns { success, token, data: { ...studentFields } }
   studentLogin: (admissionNo: string, password: string) =>
     request<{ success: boolean; token: string; data: any }>("/api/student-auth/login", {
       method: "POST",
       body: JSON.stringify({ admissionNo, password }),
     }),
 
+  // Staff /me — returns { user: { ...userFields } }
   getMe: () => request<{ user: any }>("/api/auth/me"),
+
+  // Student /me — returns { success, data: { ...studentFields } }
   getStudentMe: () => request<{ success: boolean; data: any }>("/api/student-auth/me"),
 
   register: (data: { name: string; email: string; password: string; role: string }) =>
@@ -62,18 +73,35 @@ export const auth = {
 };
 
 // ── Student dashboard ─────────────────────────────────────────────────────────
+//
+// The backend returns:
+//   { success: true, data: { student, stats, finance, announcements, upcomingAssignments } }
+//
+// request() does res.json(), so the caller receives the full envelope.
+// In components, use  r.data  to get the inner object.
 
 export const studentApi = {
-  getDashboard: () => request<{ data: any }>("/api/student-dashboard"),
+  getDashboard: () =>
+    request<ApiSuccess<{
+      student:             any;
+      stats:               any;
+      finance:             any;
+      announcements:       any[];
+      upcomingAssignments: any[];
+      recentGrades:        any[];
+    }>>("/api/student-dashboard"),
 
   getGrades: (params?: string) =>
-    request<{ data: any[] }>(`/api/student-dashboard/grades${params ? `?${params}` : ""}`),
+    request<ApiSuccess<any[]>>(`/api/student-dashboard/grades${params ? `?${params}` : ""}`),
 
-  getAssignments: () => request<{ data: any[] }>("/api/student-dashboard/assignments"),
+  getAssignments: () =>
+    request<ApiSuccess<any[]>>("/api/student-dashboard/assignments"),
 
-  getFinance: () => request<{ data: any }>("/api/student-dashboard/finance"),
+  getFinance: () =>
+    request<ApiSuccess<any>>("/api/student-dashboard/finance"),
 
-  getMaterials: () => request<{ data: any[] }>("/api/student-dashboard/materials"),
+  getMaterials: () =>
+    request<ApiSuccess<any[]>>("/api/student-dashboard/materials"),
 
   getMaterialDownloadUrl: (id: string) =>
     `${BASE}/api/student-dashboard/materials/${id}/download`,
@@ -84,20 +112,20 @@ export const studentApi = {
       method: "POST",
       headers: token ? { Authorization: `Bearer ${token}` } : {},
       body: formData,
-    }).then(r => r.json());
+    }).then((r) => r.json());
   },
 };
 
 // ── Teacher dashboard ─────────────────────────────────────────────────────────
 
 export const teacherApi = {
-  getDashboard: () => request<{ data: any }>("/api/teacher-dashboard"),
+  getDashboard: () => request<ApiSuccess<any>>("/api/teacher-dashboard"),
 
   getStudents: (cls?: string) =>
-    request<{ data: any[] }>(`/api/teacher-dashboard/students${cls ? `?class=${cls}` : ""}`),
+    request<ApiSuccess<any[]>>(`/api/teacher-dashboard/students${cls ? `?class=${cls}` : ""}`),
 
   getGrades: (params?: string) =>
-    request<{ data: any[] }>(`/api/teacher-dashboard/grades${params ? `?${params}` : ""}`),
+    request<ApiSuccess<any[]>>(`/api/teacher-dashboard/grades${params ? `?${params}` : ""}`),
 
   enterGrade: (data: any) =>
     request("/api/teacher-dashboard/grades", { method: "POST", body: JSON.stringify(data) }),
@@ -108,7 +136,7 @@ export const teacherApi = {
       body: JSON.stringify(data),
     }),
 
-  getAssignments: () => request<{ data: any[] }>("/api/teacher-dashboard/assignments"),
+  getAssignments: () => request<ApiSuccess<any[]>>("/api/teacher-dashboard/assignments"),
 
   createAssignment: (data: any) =>
     request("/api/teacher-dashboard/assignments", {
@@ -117,9 +145,11 @@ export const teacherApi = {
     }),
 
   getSubmissions: (assignmentId: string) =>
-    request<{ data: any[] }>(`/api/teacher-dashboard/assignments/${assignmentId}/submissions`),
+    request<ApiSuccess<any[]>>(
+      `/api/teacher-dashboard/assignments/${assignmentId}/submissions`
+    ),
 
-  getMaterials: () => request<{ data: any[] }>("/api/teacher-dashboard/materials"),
+  getMaterials: () => request<ApiSuccess<any[]>>("/api/teacher-dashboard/materials"),
 
   deleteMaterial: (id: string) =>
     request(`/api/teacher-dashboard/materials/${id}`, { method: "DELETE" }),
@@ -130,11 +160,10 @@ export const teacherApi = {
       method: "POST",
       headers: token ? { Authorization: `Bearer ${token}` } : {},
       body: formData,
-    }).then(r => r.json());
+    }).then((r) => r.json());
   },
 
-  getMessages: () =>
-    request<{ data: any[] }>("/api/teacher-dashboard/messages"),
+  getMessages: () => request<ApiSuccess<any[]>>("/api/teacher-dashboard/messages"),
 
   replyMessage: (data: { parentId: string; studentId: string; body: string }) =>
     request("/api/teacher-dashboard/messages/reply", {
@@ -143,9 +172,12 @@ export const teacherApi = {
     }),
 
   getAttendance: (date?: string) =>
-    request<{ data: any }>(`/api/teacher-dashboard/attendance${date ? `?date=${date}` : ""}`),
+    request<ApiSuccess<any>>(`/api/teacher-dashboard/attendance${date ? `?date=${date}` : ""}`),
 
-  markAttendance: (data: { date: string; records: { studentId: string; status: string; remarks?: string }[] }) =>
+  markAttendance: (data: {
+    date: string;
+    records: { studentId: string; status: string; remarks?: string }[];
+  }) =>
     request("/api/teacher-dashboard/attendance", {
       method: "POST",
       body: JSON.stringify(data),
@@ -155,29 +187,30 @@ export const teacherApi = {
 // ── Parent dashboard ──────────────────────────────────────────────────────────
 
 export const parentApi = {
-  getDashboard: () => request<{ data: any }>("/api/parent-dashboard"),
+  getDashboard: () => request<ApiSuccess<any>>("/api/parent-dashboard"),
 
   getChildFinance: (childId: string) =>
-    request<{ data: any }>(`/api/parent-dashboard/child/${childId}/finance`),
+    request<ApiSuccess<any>>(`/api/parent-dashboard/child/${childId}/finance`),
 
   getChildGrades: (childId: string) =>
-    request<{ data: any[] }>(`/api/parent-dashboard/child/${childId}/grades`),
+    request<ApiSuccess<any[]>>(`/api/parent-dashboard/child/${childId}/grades`),
 
   getReportCard: (childId: string) =>
-    request<{ data: any }>(`/api/parent-dashboard/child/${childId}/report-card`),
+    request<ApiSuccess<any>>(`/api/parent-dashboard/child/${childId}/report-card`),
 
   getAttendance: (childId: string) =>
-    request<{ data: any }>(`/api/parent-dashboard/child/${childId}/attendance`),
+    request<ApiSuccess<any>>(`/api/parent-dashboard/child/${childId}/attendance`),
 
-  makePayment: (childId: string, data: {
-    amount: number; method: string; reference: string; notes?: string;
-  }) =>
+  makePayment: (
+    childId: string,
+    data: { amount: number; method: string; reference: string; notes?: string }
+  ) =>
     request(`/api/parent-dashboard/child/${childId}/payment`, {
       method: "POST",
       body: JSON.stringify(data),
     }),
 
-  getMessages: () => request<{ data: any[] }>("/api/parent-dashboard/messages"),
+  getMessages: () => request<ApiSuccess<any[]>>("/api/parent-dashboard/messages"),
 
   sendMessage: (data: { teacherId: string; studentId: string; body: string }) =>
     request("/api/parent-dashboard/messages", { method: "POST", body: JSON.stringify(data) }),
@@ -187,19 +220,19 @@ export const parentApi = {
 
 export const financeApi = {
   getStats: (params?: string) =>
-    request<{ data: any }>(`/api/finance/stats${params ? `?${params}` : ""}`),
+    request<ApiSuccess<any>>(`/api/finance/stats${params ? `?${params}` : ""}`),
   getStudents: (params?: string) =>
-    request<{ data: any[] }>(`/api/finance/students${params ? `?${params}` : ""}`),
+    request<ApiSuccess<any[]>>(`/api/finance/students${params ? `?${params}` : ""}`),
   getStudentById: (id: string) =>
-    request<{ data: any }>(`/api/finance/students/${id}`),
+    request<ApiSuccess<any>>(`/api/finance/students/${id}`),
   getPayments: (params?: string) =>
-    request<{ data: any[] }>(`/api/finance/payments${params ? `?${params}` : ""}`),
+    request<ApiSuccess<any[]>>(`/api/finance/payments${params ? `?${params}` : ""}`),
   recordPayment: (data: any) =>
     request("/api/finance/payments", { method: "POST", body: JSON.stringify(data) }),
   reversePayment: (id: string) =>
     request(`/api/finance/payments/${id}`, { method: "DELETE" }),
   getFeeStructures: (params?: string) =>
-    request<{ data: any[] }>(`/api/finance/fee-structures${params ? `?${params}` : ""}`),
+    request<ApiSuccess<any[]>>(`/api/finance/fee-structures${params ? `?${params}` : ""}`),
   createFeeStructure: (data: any) =>
     request("/api/finance/fee-structures", { method: "POST", body: JSON.stringify(data) }),
   updateFeeStructure: (id: string, data: any) =>
@@ -209,7 +242,7 @@ export const financeApi = {
 };
 
 export const announcementApi = {
-  getAll: () => request<{ data: any[] }>("/api/admin-dashboard/announcements"),
+  getAll: () => request<ApiSuccess<any[]>>("/api/admin-dashboard/announcements"),
   create: (data: any) =>
     request("/api/admin-dashboard/announcements", { method: "POST", body: JSON.stringify(data) }),
   update: (id: string, data: any) =>
@@ -223,7 +256,7 @@ export const announcementApi = {
 
 export const adminGradeApi = {
   getAll: (params?: string) =>
-    request<{ data: any[] }>(`/api/admin-dashboard/grades${params ? `?${params}` : ""}`),
+    request<ApiSuccess<any[]>>(`/api/admin-dashboard/grades${params ? `?${params}` : ""}`),
   create: (data: any) =>
     request("/api/admin-dashboard/grades", { method: "POST", body: JSON.stringify(data) }),
   delete: (id: string) =>
@@ -232,7 +265,9 @@ export const adminGradeApi = {
 
 export const adminAssignmentApi = {
   getAll: (params?: string) =>
-    request<{ data: any[] }>(`/api/admin-dashboard/assignments${params ? `?${params}` : ""}`),
+    request<ApiSuccess<any[]>>(
+      `/api/admin-dashboard/assignments${params ? `?${params}` : ""}`
+    ),
   create: (data: any) =>
     request("/api/admin-dashboard/assignments", { method: "POST", body: JSON.stringify(data) }),
   delete: (id: string) =>

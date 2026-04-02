@@ -25,9 +25,17 @@ export default function StudentDashboard() {
 
   useEffect(() => {
     if (authLoading || !user) return;
-    studentApi.getDashboard()
-      .then((r) => setData(r.data))
-      .catch((e) => toast({ title: "Error", description: e.message, variant: "destructive" }))
+
+    studentApi
+      .getDashboard()
+      // The request() helper returns res.json() directly, so the shape is:
+      // { success: true, data: { student, stats, finance, announcements, upcomingAssignments } }
+      // We store only the inner `data` object so the rest of the component
+      // can reference data.student, data.announcements, etc. directly.
+      .then((r: any) => setData(r.data))
+      .catch((e: any) =>
+        toast({ title: "Error", description: e.message, variant: "destructive" })
+      )
       .finally(() => setLoading(false));
   }, [authLoading, user]);
 
@@ -40,12 +48,17 @@ export default function StudentDashboard() {
     </div>
   );
 
-  const student = data?.student;
-  const stats = data?.stats;
-  const finance = data?.finance;
+  // `data` is now the inner object, so all fields are top-level
+  const student      = data?.student;
+  const stats        = data?.stats;
+  const finance      = data?.finance;
   const announcements = data?.announcements || [];
-  const assignments = data?.upcomingAssignments || [];
-  const feePercent = finance?.totalFees > 0 ? Math.min(100, Math.round((finance.amountPaid / finance.totalFees) * 100)) : 100;
+  const assignments  = data?.upcomingAssignments || [];
+
+  const feePercent =
+    finance?.totalFees > 0
+      ? Math.min(100, Math.round((finance.amountPaid / finance.totalFees) * 100))
+      : 100;
 
   return (
     <div className="min-h-screen mesh-bg pb-24">
@@ -61,7 +74,8 @@ export default function StudentDashboard() {
             <div className="animate-slide-up">
               <p className="text-white/70 text-sm font-medium">Good day,</p>
               <h1 className="text-2xl sm:text-3xl font-bold mt-0.5 tracking-tight">
-                {student?.fullName || user?.name} 👋
+                {/* Fallback chain: fullName from dashboard → name from /me → "Student" */}
+                {student?.fullName || user?.fullName || user?.name || "Student"} 👋
               </h1>
               <div className="flex items-center gap-2 mt-2">
                 <span className="bg-white/20 text-white text-xs font-semibold px-2.5 py-1 rounded-full">
@@ -72,8 +86,12 @@ export default function StudentDashboard() {
                 </span>
               </div>
             </div>
-            <Button variant="ghost" size="icon" onClick={signOut}
-              className="text-white hover:bg-white/20 rounded-xl">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={signOut}
+              className="text-white hover:bg-white/20 rounded-xl"
+            >
               <LogOut className="h-5 w-5" />
             </Button>
           </div>
@@ -81,11 +99,14 @@ export default function StudentDashboard() {
           {/* Quick stats in header */}
           <div className="grid grid-cols-3 gap-2 mt-5">
             {[
-              { label: "Average", value: `${stats?.average ?? 0}%`, icon: TrendingUp },
-              { label: "Pending", value: stats?.pendingAssignments ?? 0, icon: ClipboardList },
-              { label: "Subjects", value: stats?.subjectCount ?? 0, icon: BookOpen },
+              { label: "Average",  value: `${stats?.average ?? 0}%`,         icon: TrendingUp },
+              { label: "Pending",  value: stats?.pendingAssignments ?? 0,     icon: ClipboardList },
+              { label: "Subjects", value: stats?.subjectCount ?? 0,           icon: BookOpen },
             ].map(({ label, value, icon: Icon }) => (
-              <div key={label} className="bg-white/15 backdrop-blur-sm rounded-xl px-3 py-2.5 text-center">
+              <div
+                key={label}
+                className="bg-white/15 backdrop-blur-sm rounded-xl px-3 py-2.5 text-center"
+              >
                 <Icon className="h-4 w-4 mx-auto mb-1 text-white/80" />
                 <p className="text-lg font-bold text-white">{value}</p>
                 <p className="text-white/65 text-[11px]">{label}</p>
@@ -100,13 +121,15 @@ export default function StudentDashboard() {
         {/* ── Quick Actions ── */}
         <div className="grid grid-cols-2 gap-3">
           {[
-            { label: "My Grades", icon: Award, to: "/student/grades", gradient: "from-violet-500 to-purple-600" },
+            { label: "My Grades",   icon: Award,        to: "/student/grades",      gradient: "from-violet-500 to-purple-600" },
             { label: "Assignments", icon: ClipboardList, to: "/student/assignments", gradient: "from-blue-500 to-cyan-500" },
-            { label: "Materials", icon: Package, to: "/student/materials", gradient: "from-emerald-500 to-teal-500" },
-            { label: "Finance", icon: DollarSign, to: "/student/finance", gradient: "from-orange-500 to-amber-500" },
+            { label: "Materials",   icon: Package,       to: "/student/materials",   gradient: "from-emerald-500 to-teal-500" },
+            { label: "Finance",     icon: DollarSign,    to: "/student/finance",     gradient: "from-orange-500 to-amber-500" },
           ].map(({ label, icon: Icon, to, gradient }) => (
             <Link key={label} to={to}>
-              <div className={`bg-gradient-to-br ${gradient} text-white rounded-2xl p-4 flex items-center gap-3 card-lift shadow-md`}>
+              <div
+                className={`bg-gradient-to-br ${gradient} text-white rounded-2xl p-4 flex items-center gap-3 card-lift shadow-md`}
+              >
                 <div className="bg-white/20 rounded-xl p-2">
                   <Icon className="h-5 w-5" />
                 </div>
@@ -130,10 +153,25 @@ export default function StudentDashboard() {
             <div className="px-4 py-3 space-y-2">
               <Progress value={feePercent} className="h-2.5 rounded-full" />
               <div className="flex justify-between text-xs text-muted-foreground">
-                <span>Paid: <span className="font-semibold text-foreground">KSH {finance?.amountPaid?.toLocaleString() ?? 0}</span></span>
-                <span>Balance: <span className={`font-semibold ${feePercent < 100 ? "text-orange-600" : "text-emerald-600"}`}>
-                  KSH {((finance?.totalFees ?? 0) - (finance?.amountPaid ?? 0)).toLocaleString()}
-                </span></span>
+                <span>
+                  Paid:{" "}
+                  <span className="font-semibold text-foreground">
+                    KSH {finance?.amountPaid?.toLocaleString() ?? 0}
+                  </span>
+                </span>
+                <span>
+                  Balance:{" "}
+                  <span
+                    className={`font-semibold ${
+                      feePercent < 100 ? "text-orange-600" : "text-emerald-600"
+                    }`}
+                  >
+                    KSH{" "}
+                    {(
+                      (finance?.totalFees ?? 0) - (finance?.amountPaid ?? 0)
+                    ).toLocaleString()}
+                  </span>
+                </span>
               </div>
             </div>
           </CardContent>
@@ -146,7 +184,12 @@ export default function StudentDashboard() {
               <h2 className="font-bold text-sm flex items-center gap-2">
                 <Zap className="h-4 w-4 text-violet-500" />Due Soon
               </h2>
-              <Link to="/student/assignments" className="text-xs text-violet-600 font-medium">View all</Link>
+              <Link
+                to="/student/assignments"
+                className="text-xs text-violet-600 font-medium"
+              >
+                View all
+              </Link>
             </div>
             <div className="space-y-2">
               {assignments.slice(0, 3).map((a: any) => (
@@ -160,7 +203,10 @@ export default function StudentDashboard() {
                       <p className="text-xs text-muted-foreground">{a.subject}</p>
                     </div>
                     <Badge className="bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400 border-0 text-[10px] shrink-0">
-                      {new Date(a.dueDate).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+                      {new Date(a.dueDate).toLocaleDateString("en-GB", {
+                        day: "numeric",
+                        month: "short",
+                      })}
                     </Badge>
                   </CardContent>
                 </Card>
@@ -177,10 +223,17 @@ export default function StudentDashboard() {
             </h2>
             <div className="space-y-2">
               {announcements.slice(0, 3).map((a: any) => (
-                <Card key={a._id} className="border-0 shadow-card border-l-4 border-l-blue-500">
+                <Card
+                  key={a._id}
+                  className="border-0 shadow-card border-l-4 border-l-blue-500"
+                >
                   <CardContent className="p-3.5">
                     <p className="font-semibold text-sm">{a.title}</p>
-                    {a.body && <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{a.body}</p>}
+                    {a.body && (
+                      <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                        {a.body}
+                      </p>
+                    )}
                     <p className="text-[10px] text-muted-foreground mt-1.5">
                       {new Date(a.createdAt).toLocaleDateString()}
                     </p>
@@ -190,7 +243,15 @@ export default function StudentDashboard() {
             </div>
           </div>
         )}
+
+        {/* Empty state when no announcements */}
+        {announcements.length === 0 && !loading && (
+          <div className="text-center py-6 text-muted-foreground text-sm">
+            No announcements at the moment.
+          </div>
+        )}
       </div>
+
       <BottomNav role="student" />
     </div>
   );

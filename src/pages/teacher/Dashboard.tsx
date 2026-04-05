@@ -24,7 +24,7 @@ export default function TeacherDashboard() {
   useEffect(() => {
     if (authLoading || !user) return;
     teacherApi.getDashboard()
-      .then(r => setData(r.data))
+      .then(r => setData(r))
       .catch(e => toast({ title: "Error", description: e.message, variant: "destructive" }))
       .finally(() => setLoading(false));
   }, [authLoading, user]);

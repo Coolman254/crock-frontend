@@ -105,7 +105,7 @@ function UploadModal({
     setBusy(true);
     try {
       const token = getToken();
-      const res = await fetch(`${BASE}/api/teacher-dashboard/materials`, {
+      const res = await fetch(`${BASE}/api/admin-dashboard/materials`, {
         method: "POST",
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         body: fd,
@@ -180,7 +180,7 @@ export default function ContentPage() {
     setLoading(true);
     try {
       // Fetch from all teachers (admin view) — falls back to teacher endpoint
-      const data = await apiFetch("/api/teacher-dashboard/materials");
+      const data = await apiFetch("/api/admin-dashboard/materials");
       setMaterials(data.data ?? []);
     } catch (e: any) {
       toast({ title: "Failed to load materials", description: e.message, variant: "destructive" });
@@ -194,7 +194,7 @@ export default function ContentPage() {
   const handleDelete = async (id: string, name: string) => {
     if (!confirm(`Delete "${name}"?`)) return;
     try {
-      await apiFetch(`/api/teacher-dashboard/materials/${id}`, { method: "DELETE" });
+      await apiFetch(`/api/admin-dashboard/materials/${id}`, { method: "DELETE" });
       setMaterials(m => m.filter(x => x._id !== id));
       toast({ title: "Deleted", description: `"${name}" removed.` });
     } catch (e: any) {

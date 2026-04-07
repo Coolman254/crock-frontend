@@ -6,33 +6,42 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import {
-  Phone,
-  Mail,
-  MapPin,
-  Clock,
-  Send,
-  CheckCircle,
-} from "lucide-react";
+import { Phone, Mail, MapPin, Clock, Send, CheckCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
-export default function ContactPage() {
-  const [submitted, setSubmitted] = useState(false);
-  const { toast } = useToast();
+const BASE = (import.meta.env.VITE_API_URL as string) || "http://localhost:5000";
 
-  const handleSubmit = (e: React.FormEvent) => {
+export default function ContactPage() {
+  const { toast } = useToast();
+  const [submitted, setSubmitted] = useState(false);
+  const [busy, setBusy]           = useState(false);
+  const [form, setForm] = useState({
+    firstName: "", lastName: "", email: "",
+    phone: "", subject: "", message: "",
+  });
+
+  const set = (field: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+    setForm(f => ({ ...f, [field]: e.target.value }));
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSubmitted(true);
-    toast({
-      title: "Message Sent!",
-      description: "We'll get back to you within 24 hours.",
-    });
+    setBusy(true);
+    try {
+      const res  = await fetch(`${BASE}/api/contact`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify(form),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Failed to send message");
+      setSubmitted(true);
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -51,6 +60,7 @@ export default function ContactPage() {
       <section className="py-16">
         <div className="container mx-auto px-4">
           <div className="grid lg:grid-cols-2 gap-12 max-w-6xl mx-auto">
+
             {/* Contact Form */}
             <Card className="border-border/50">
               <CardHeader>
@@ -69,7 +79,7 @@ export default function ContactPage() {
                     <Button
                       variant="outline"
                       className="mt-6"
-                      onClick={() => setSubmitted(false)}
+                      onClick={() => { setSubmitted(false); setForm({ firstName: "", lastName: "", email: "", phone: "", subject: "", message: "" }); }}
                     >
                       Send Another Message
                     </Button>
@@ -78,33 +88,28 @@ export default function ContactPage() {
                   <form onSubmit={handleSubmit} className="space-y-4">
                     <div className="grid sm:grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <Label htmlFor="firstName">First Name</Label>
-                        <Input id="firstName" placeholder="John" required />
+                        <Label htmlFor="firstName">First Name *</Label>
+                        <Input id="firstName" placeholder="John" required value={form.firstName} onChange={set("firstName")} />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="lastName">Last Name</Label>
-                        <Input id="lastName" placeholder="Doe" required />
+                        <Label htmlFor="lastName">Last Name *</Label>
+                        <Input id="lastName" placeholder="Doe" required value={form.lastName} onChange={set("lastName")} />
                       </div>
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="email">Email</Label>
-                      <Input
-                        id="email"
-                        type="email"
-                        placeholder="john@example.com"
-                        required
-                      />
+                      <Label htmlFor="email">Email *</Label>
+                      <Input id="email" type="email" placeholder="john@example.com" required value={form.email} onChange={set("email")} />
                     </div>
 
                     <div className="space-y-2">
                       <Label htmlFor="phone">Phone Number</Label>
-                      <Input id="phone" placeholder="+254 700 000 000" />
+                      <Input id="phone" placeholder="+254 700 000 000" value={form.phone} onChange={set("phone")} />
                     </div>
 
                     <div className="space-y-2">
                       <Label htmlFor="subject">Subject</Label>
-                      <Select>
+                      <Select onValueChange={v => setForm(f => ({ ...f, subject: v }))}>
                         <SelectTrigger id="subject">
                           <SelectValue placeholder="Select a subject" />
                         </SelectTrigger>
@@ -119,22 +124,13 @@ export default function ContactPage() {
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="message">Message</Label>
-                      <Textarea
-                        id="message"
-                        placeholder="How can we help you?"
-                        rows={5}
-                        required
-                      />
+                      <Label htmlFor="message">Message *</Label>
+                      <Textarea id="message" placeholder="How can we help you?" rows={5} required value={form.message} onChange={set("message")} />
                     </div>
 
-                    <Button
-                      type="submit"
-                      size="lg"
-                      className="w-full min-h-[48px] gradient-accent text-accent-foreground"
-                    >
+                    <Button type="submit" size="lg" className="w-full min-h-[48px] gradient-accent text-accent-foreground" disabled={busy}>
                       <Send className="mr-2 h-4 w-4" />
-                      Send Message
+                      {busy ? "Sending…" : "Send Message"}
                     </Button>
                   </form>
                 )}
@@ -144,85 +140,32 @@ export default function ContactPage() {
             {/* Contact Info */}
             <div className="space-y-6">
               <div>
-                <h2 className="font-display text-2xl font-bold text-foreground mb-6">
-                  Get in Touch
-                </h2>
+                <h2 className="font-display text-2xl font-bold text-foreground mb-6">Get in Touch</h2>
                 <p className="text-muted-foreground mb-8">
-                  Feel free to reach out to us through any of the following channels.
-                  Our team is ready to assist you.
+                  Feel free to reach out through any of the following channels. Our team is ready to assist you.
                 </p>
               </div>
 
-              <Card className="border-border/50">
-                <CardContent className="p-6">
-                  <div className="flex items-start gap-4">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-accent/10">
-                      <MapPin className="h-6 w-6 text-accent" />
+              {[
+                { icon: MapPin, title: "Location", content: "Globaltech Town, Kiambu County\nAlong Thika Superhighway\nP.O. Box 123-00232, Globaltech, Kenya" },
+                { icon: Phone,  title: "Phone",    content: "Main: +254 700 123 456\nAdmissions: +254 700 123 457" },
+                { icon: Mail,   title: "Email",    content: "General: info@globaltech.ac.ke\nAdmissions: admissions@globaltech.ac.ke\nSupport: support@globaltech.ac.ke" },
+                { icon: Clock,  title: "Office Hours", content: "Monday - Friday: 7:00 AM - 5:00 PM\nSaturday: 8:00 AM - 12:00 PM\nSunday: Closed" },
+              ].map(({ icon: Icon, title, content }) => (
+                <Card key={title} className="border-border/50">
+                  <CardContent className="p-6">
+                    <div className="flex items-start gap-4">
+                      <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-accent/10">
+                        <Icon className="h-6 w-6 text-accent" />
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-foreground">{title}</h3>
+                        <p className="text-muted-foreground mt-1 whitespace-pre-line">{content}</p>
+                      </div>
                     </div>
-                    <div>
-                      <h3 className="font-semibold text-foreground">Location</h3>
-                      <p className="text-muted-foreground mt-1">
-                        Globaltech Town, Kiambu County<br />
-                        Along Thika Superhighway<br />
-                        P.O. Box 123-00232, Globaltech, Kenya
-                      </p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="border-border/50">
-                <CardContent className="p-6">
-                  <div className="flex items-start gap-4">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-accent/10">
-                      <Phone className="h-6 w-6 text-accent" />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-foreground">Phone</h3>
-                      <p className="text-muted-foreground mt-1">
-                        Main: +254 700 123 456<br />
-                        Admissions: +254 700 123 457
-                      </p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="border-border/50">
-                <CardContent className="p-6">
-                  <div className="flex items-start gap-4">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-accent/10">
-                      <Mail className="h-6 w-6 text-accent" />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-foreground">Email</h3>
-                      <p className="text-muted-foreground mt-1">
-                        General: info@globaltech.ac.ke<br />
-                        Admissions: admissions@globaltech.ac.ke<br />
-                        Support: support@globaltech.ac.ke
-                      </p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="border-border/50">
-                <CardContent className="p-6">
-                  <div className="flex items-start gap-4">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-accent/10">
-                      <Clock className="h-6 w-6 text-accent" />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-foreground">Office Hours</h3>
-                      <p className="text-muted-foreground mt-1">
-                        Monday - Friday: 7:00 AM - 5:00 PM<br />
-                        Saturday: 8:00 AM - 12:00 PM<br />
-                        Sunday: Closed
-                      </p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
+              ))}
             </div>
           </div>
         </div>

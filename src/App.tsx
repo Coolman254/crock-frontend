@@ -47,6 +47,8 @@ import ClassesPage from "./pages/admin/Classes";
 import SettingsPage from "./pages/admin/Settings";
 import ContentPage from "./pages/admin/Content";
 import AdminAttendance from "./pages/admin/Attendance";
+import ContactsPage from "./pages/admin/Contacts";
+
 
 const queryClient = new QueryClient();
 
@@ -102,7 +104,8 @@ const App = () => (
               <Route path="/admin/classes" element={<ClassesPage />} />
               <Route path="/admin/settings" element={<SettingsPage />} />
               <Route path="/admin/content" element={<ContentPage />} />
-               <Route path="/admin/attendance" element={<AdminAttendance />} />
+              <Route path="/admin/attendance" element={<AdminAttendance />} />
+              <Route path="/admin/contacts" element={<ContactsPage />} />
 
               <Route path="*" element={<NotFound />} />
             </Routes>

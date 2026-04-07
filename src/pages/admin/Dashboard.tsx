@@ -59,6 +59,7 @@ export default function AdminDashboard() {
     { label: "Finance",      to: "/admin/finance",      gradient: "from-red-500 to-rose-500"     },
     { label: "Reports",      to: "/admin/reports",      gradient: "from-pink-500 to-fuchsia-500" },
     { label: "Attendance", to: "/admin/attendance", gradient: "from-teal-500 to-cyan-500" },
+    { label: "Messages", to: "/admin/contacts", gradient: "from-pink-500 to-rose-500" },
   ];
 
   return (

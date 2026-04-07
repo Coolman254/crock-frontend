@@ -94,7 +94,6 @@ export const studentApi = {
   getMaterials: () =>
     request<ApiSuccess<any[]>>("/api/student-dashboard/materials"),
 
-  // ✅ FIXED: authenticated download — sends Bearer token so protect() doesn't block it
   downloadMaterial: async (id: string, fileName: string): Promise<void> => {
     const token = getToken();
     const res = await fetch(`${BASE}/api/student-dashboard/materials/${id}/download`, {
@@ -102,7 +101,6 @@ export const studentApi = {
     });
 
     if (!res.ok) {
-      // Try to parse error message from JSON body
       const errBody = await res.json().catch(() => ({}));
       throw new Error(errBody.message || `Download failed (${res.status})`);
     }
@@ -131,7 +129,7 @@ export const studentApi = {
 // ── Teacher dashboard ─────────────────────────────────────────────────────────
 
 export const teacherApi = {
-  getDashboard: () => request<ApiSuccess<any>>("/api/teacher-dashboard"),
+  getDashboard: () => request<any>("/api/teacher-dashboard"),
 
   getStudents: (cls?: string) =>
     request<ApiSuccess<any[]>>(`/api/teacher-dashboard/students${cls ? `?class=${cls}` : ""}`),
@@ -317,4 +315,24 @@ export const parentCrudApi = {
     request(`/api/parents/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   delete: (id: string) =>
     request(`/api/parents/${id}`, { method: "DELETE" }),
+};
+
+// ── Contact (public form + admin inbox) ───────────────────────────────────────
+
+export const contactApi = {
+  // Public — no auth needed
+  submit: (data: {
+    firstName: string;
+    lastName: string;
+    email: string;
+    phone?: string;
+    subject?: string;
+    message: string;
+  }) =>
+    request("/api/contact", { method: "POST", body: JSON.stringify(data) }),
+
+  // Admin only
+  getAll:   () => request<ApiSuccess<any[]>>("/api/contact"),
+  markRead: (id: string) => request(`/api/contact/${id}/read`, { method: "PATCH" }),
+  delete:   (id: string) => request(`/api/contact/${id}`, { method: "DELETE" }),
 };
